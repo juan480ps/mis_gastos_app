@@ -13,12 +13,12 @@ interface TransactionDao {
     @Delete
     suspend fun delete(transaction: TransactionEntity)
 
-    @Query("SELECT * FROM transactions ORDER BY id DESC")
-    fun getAll(): Flow<List<TransactionEntity>>
+    @Query("SELECT * FROM transactions WHERE userId = :userId ORDER BY date DESC, id DESC")
+    fun getAll(userId: Int): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
-    suspend fun getById(id: Int): TransactionEntity?
+    @Query("SELECT * FROM transactions WHERE id = :id AND userId = :userId LIMIT 1")
+    suspend fun getById(id: Int, userId: Int): TransactionEntity?
 
-    @Query("SELECT SUM(amount) FROM transactions WHERE categoryId = :categoryId AND date LIKE :monthYearPattern AND amount < 0")
-    fun getSpentAmountForCategoryInMonth(categoryId: Int, monthYearPattern: String): Double?
+    @Query("SELECT SUM(amount) FROM transactions WHERE categoryId = :categoryId AND date LIKE :monthYearPattern AND amount < 0 AND userId = :userId")
+    fun getSpentAmountForCategoryInMonth(categoryId: Int, monthYearPattern: String, userId: Int): Double?
 }

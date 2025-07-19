@@ -16,11 +16,11 @@ interface RecurringTransactionDao {
     @Delete
     suspend fun delete(recurringTransaction: RecurringTransactionEntity)
 
-    @Query("SELECT * FROM recurring_transactions WHERE id = :id")
-    suspend fun getById(id: Int): RecurringTransactionEntity?
+    @Query("SELECT * FROM recurring_transactions WHERE id = :id AND userId = :userId")
+    suspend fun getById(id: Int, userId: Int): RecurringTransactionEntity?
 
-    @Query("SELECT * FROM recurring_transactions ORDER BY nextDueDate ASC")
-    fun getAll(): Flow<List<RecurringTransactionEntity>>
+    @Query("SELECT * FROM recurring_transactions WHERE userId = :userId ORDER BY nextDueDate ASC")
+    fun getAll(userId: Int): Flow<List<RecurringTransactionEntity>>
 
     @Query("SELECT * FROM recurring_transactions WHERE isActive = 1 AND nextDueDate <= :currentDate")
     suspend fun getDueRecurringTransactions(currentDate: String): List<RecurringTransactionEntity>

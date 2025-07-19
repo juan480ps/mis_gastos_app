@@ -19,10 +19,10 @@ class RecurringTransactionRepository(
     private val categoryDao: CategoryDao
 ) {
 
-    val allRecurringTransactions: Flow<List<RecurringTransaction>> = recurringDao.getAll()
+    fun allRecurringTransactions(userId: Int): Flow<List<RecurringTransaction>> = recurringDao.getAll(userId)
         .map { entities ->
             entities.map { entity ->
-                val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it) }
+                val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it, userId) }
                 RecurringTransaction(
                     id = entity.id,
                     title = entity.title,
@@ -34,12 +34,13 @@ class RecurringTransactionRepository(
                     startDate = entity.startDate,
                     endDate = entity.endDate,
                     nextDueDate = entity.nextDueDate,
-                    isActive = entity.isActive
+                    isActive = entity.isActive,
+                    userId = entity.userId
                 )
             }
         }
 
-    suspend fun getById(id: Int): RecurringTransactionEntity? = recurringDao.getById(id)
+    suspend fun getById(id: Int, userId: Int): RecurringTransactionEntity? = recurringDao.getById(id, userId)
 
     suspend fun insert(entity: RecurringTransactionEntity) = recurringDao.insert(entity)
 
@@ -68,7 +69,8 @@ class RecurringTransactionRepository(
                     title = item.title,
                     amount = -item.amount,
                     date = item.nextDueDate,
-                    categoryId = item.categoryId
+                    categoryId = item.categoryId,
+                    userId = item.userId
                 )
             )
 
@@ -113,7 +115,8 @@ class RecurringTransactionRepository(
             startDate = item.startDate,
             endDate = item.endDate,
             nextDueDate = item.nextDueDate,
-            isActive = item.isActive
+            isActive = item.isActive,
+            userId = item.userId
         )
     }
 }

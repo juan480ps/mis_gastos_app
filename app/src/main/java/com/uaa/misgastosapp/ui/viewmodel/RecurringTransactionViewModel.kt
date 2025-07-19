@@ -11,10 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.uaa.misgastosapp.data.*
 import com.uaa.misgastosapp.data.repository.RecurringTransactionRepository
 import com.uaa.misgastosapp.model.RecurringTransaction
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.catch
+import com.uaa.misgastosapp.utils.SecureSessionManager
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -23,6 +21,7 @@ import java.time.format.DateTimeFormatter
 @RequiresApi(Build.VERSION_CODES.O)
 class RecurringTransactionViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: RecurringTransactionRepository
+    private val sessionManager = SecureSessionManager(application)
 
     init {
         val db = AppDatabase.getInstance(application)
@@ -33,7 +32,10 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
         )
     }
 
-    val recurringTransactions: StateFlow<List<RecurringTransaction>> = repository.allRecurringTransactions
+    val recurringTransactions: StateFlow<List<RecurringTransaction>> = sessionManager.userIdFlow
+        .flatMapLatest { userId ->
+            repository.allRecurringTransactions(userId)
+        }
         .catch { e ->
             Log.e("RecurringVM", "Error en el flujo de transacciones recurrentes", e)
             emit(emptyList())
@@ -43,7 +45,12 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
     fun getRecurringTransactionById(id: Int, callback: (RecurringTransactionEntity?) -> Unit) {
         viewModelScope.launch {
             try {
-                callback(repository.getById(id))
+                val userId = sessionManager.getUserId()
+                if (userId == 0) {
+                    callback(null)
+                    return@launch
+                }
+                callback(repository.getById(id, userId))
             } catch (e: Exception) {
                 Log.e("RecurringVM", "Error al obtener transacción recurrente por ID", e)
                 callback(null)
@@ -70,6 +77,8 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
                 if (title.isBlank()) throw IllegalArgumentException("El título no puede estar vacío.")
                 if (amount <= 0) throw IllegalArgumentException("El monto debe ser mayor a cero.")
                 if (dayOfMonth !in 1..31) throw IllegalArgumentException("Día del mes inválido.")
+                val userId = sessionManager.getUserId()
+                if (userId == 0) throw IllegalStateException("Usuario no autenticado.")
 
                 val formatter = DateTimeFormatter.ISO_LOCAL_DATE
                 val entity = RecurringTransactionEntity(
@@ -83,7 +92,8 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
                     endDate = endDate?.format(formatter),
 
                     nextDueDate = calculateNextDueDate(startDate, dayOfMonth).format(formatter),
-                    isActive = isActive
+                    isActive = isActive,
+                    userId = userId
                 )
 
                 if (id == null) {

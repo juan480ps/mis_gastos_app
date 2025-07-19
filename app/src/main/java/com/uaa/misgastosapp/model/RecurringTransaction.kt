@@ -15,5 +15,6 @@ data class RecurringTransaction(
     val startDate: String,
     val endDate: String?,
     val nextDueDate: String,
-    val isActive: Boolean
+    val isActive: Boolean,
+    val userId: Int
 )

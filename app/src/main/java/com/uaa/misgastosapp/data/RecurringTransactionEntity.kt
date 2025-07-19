@@ -18,6 +18,12 @@ enum class RecurrenceType {
             parentColumns = ["id"],
             childColumns = ["categoryId"],
             onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = UserEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["userId"],
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )
@@ -31,5 +37,6 @@ data class RecurringTransactionEntity(
     val startDate: String,
     val endDate: String?,
     var nextDueDate: String,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val userId: Int
 )

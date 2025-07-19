@@ -45,7 +45,7 @@ class SecureSessionManager(context: Context) {
             putString(USER_USERNAME, username)
             putString(ACCESS_TOKEN, accessToken)
             putBoolean(IS_LOGGED_IN, true)
-            commit()
+            commit() // Using commit for immediate synchronous save
         }
         _userIdFlow.value = userId
     }

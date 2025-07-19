@@ -18,10 +18,10 @@ class TransactionRepository(
     private val categoryDao: CategoryDao
 ) {
 
-    val allTransactions: Flow<List<Transaction>> = transactionDao.getAll()
+    fun allTransactions(userId: Int): Flow<List<Transaction>> = transactionDao.getAll(userId)
         .map { entityList ->
             entityList.map { entity ->
-                val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it) } ?: "Sin Categoría"
+                val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it, userId) } ?: "Sin Categoría"
                 Transaction(
                     id = entity.id,
                     title = entity.title,
@@ -33,18 +33,19 @@ class TransactionRepository(
             }
         }
 
-    suspend fun insertTransaction(title: String, amount: Double, date: String, categoryId: Int?) {
+    suspend fun insertTransaction(title: String, amount: Double, date: String, categoryId: Int?, userId: Int) {
         val transaction = TransactionEntity(
             title = title,
             amount = amount,
             date = date,
-            categoryId = categoryId
+            categoryId = categoryId,
+            userId = userId
         )
         transactionDao.insert(transaction)
     }
 
-    suspend fun deleteTransaction(id: Int) {
-        val transactionToDelete = transactionDao.getById(id)
+    suspend fun deleteTransaction(id: Int, userId: Int) {
+        val transactionToDelete = transactionDao.getById(id, userId)
             ?: throw NoSuchElementException("Transacción con ID $id no encontrada.")
         transactionDao.delete(transactionToDelete)
     }

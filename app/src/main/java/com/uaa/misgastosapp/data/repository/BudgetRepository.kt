@@ -16,12 +16,12 @@ class BudgetRepository(
     private val categoryDao: CategoryDao,
     private val transactionDao: TransactionDao
 ) {
-    fun getBudgetsWithSpendingForMonth(monthYearFlow: Flow<String>): Flow<List<Budget>> {
+    fun getBudgetsWithSpendingForMonth(monthYearFlow: Flow<String>, userId: Int): Flow<List<Budget>> {
         return monthYearFlow.flatMapLatest { monthStr ->
             combine(
-                categoryDao.getAll(),
-                budgetDao.getBudgetsForMonth(monthStr),
-                transactionDao.getAll()
+                categoryDao.getAll(userId),
+                budgetDao.getBudgetsForMonth(monthStr, userId),
+                transactionDao.getAll(userId)
             ) { categoriesEntities, budgetEntities, transactionEntities ->
                 val transactionsForMonth = transactionEntities.filter {
                     it.date.startsWith(monthStr) && it.amount < 0
@@ -46,19 +46,20 @@ class BudgetRepository(
         }
     }
 
-    suspend fun setBudget(categoryId: Int, amount: Double, monthYear: String) {
+    suspend fun setBudget(categoryId: Int, amount: Double, monthYear: String, userId: Int) {
         if (amount < 0) {
             throw IllegalArgumentException("El presupuesto no puede ser negativo.")
         }
         val budgetEntity = BudgetEntity(
             categoryId = categoryId,
             monthYear = monthYear,
-            amount = amount
+            amount = amount,
+            userId = userId
         )
         budgetDao.insertOrUpdate(budgetEntity)
     }
 
-    fun getBudgetForCategoryAndMonth(categoryId: Int, monthYear: String): Flow<BudgetEntity?> {
-        return budgetDao.getBudgetForCategoryAndMonth(categoryId, monthYear)
+    fun getBudgetForCategoryAndMonth(categoryId: Int, monthYear: String, userId: Int): Flow<BudgetEntity?> {
+        return budgetDao.getBudgetForCategoryAndMonth(categoryId, monthYear, userId)
     }
 }

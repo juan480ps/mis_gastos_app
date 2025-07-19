@@ -14,6 +14,12 @@ import androidx.room.PrimaryKey
             parentColumns = ["id"],
             childColumns = ["categoryId"],
             onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = UserEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["userId"],
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )
@@ -22,5 +28,6 @@ data class TransactionEntity(
     val title: String,
     val amount: Double,
     val date: String,
-    val categoryId: Int? = null
+    val categoryId: Int? = null,
+    val userId: Int
 )
