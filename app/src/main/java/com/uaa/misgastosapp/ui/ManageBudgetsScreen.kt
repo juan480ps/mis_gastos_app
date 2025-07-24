@@ -34,21 +34,26 @@ import java.util.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla (composable) para gestionar los presupuestos.
 @Composable
 fun ManageBudgetsScreen(
     navController: NavController,
     budgetViewModel: BudgetViewModel = viewModel()
 ) {
-
+    // se obtienen los estados desde el viewmodel.
     val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState(initial = emptyList())
     val currentYearMonth by budgetViewModel.currentMonthYear.collectAsState()
+    // se definen estados para manejar el dialogo de edicion de presupuesto.
     var showSetBudgetDialog by remember { mutableStateOf(false) }
     var selectedCategoryForBudget by remember { mutableStateOf<Budget?>(null) }
     val context = LocalContext.current
     val monthDisplayFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
 
+    // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
         topBar = {
             TopAppBar(
@@ -64,6 +69,7 @@ fun ManageBudgetsScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
+                // se añade un navegador de meses en la barra de acciones.
                 actions = {
                     MonthNavigator(
                         currentYearMonth = currentYearMonth,
@@ -80,16 +86,19 @@ fun ManageBudgetsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
             )
+            // si no hay presupuestos, se muestra un mensaje.
             if (budgetsWithSpending.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No hay categorías para presupuestar o no hay categorías creadas.")
                 }
             } else {
+                // si hay presupuestos, se muestran en una lista.
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(budgetsWithSpending) { budgetItem ->
                         BudgetListItem(
                             budget = budgetItem,
                             onEditClick = {
+                                // al hacer clic en editar, se guarda la categoria y se abre el dialogo.
                                 selectedCategoryForBudget = budgetItem
                                 showSetBudgetDialog = true
                             }
@@ -98,6 +107,7 @@ fun ManageBudgetsScreen(
                 }
             }
         }
+        // se muestra el dialogo para establecer el presupuesto si 'showsetbudgetdialog' es verdadero.
         if (showSetBudgetDialog && selectedCategoryForBudget != null) {
             SetBudgetDialog(
                 budgetInfo = selectedCategoryForBudget!!,
@@ -122,7 +132,9 @@ fun ManageBudgetsScreen(
     }
 }
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// este es un composable reutilizable para navegar entre meses.
 @Composable
 fun MonthNavigator(
     currentYearMonth: YearMonth,
@@ -143,12 +155,15 @@ fun MonthNavigator(
     }
 }
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// este es un composable reutilizable para cada elemento de la lista de presupuestos.
 @Composable
 fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("es", "PY")).apply {
         maximumFractionDigits = 0
     }
+    // se determina el color de la barra de progreso.
     val progressColor = when {
         budget.progress > 1f -> MaterialTheme.colorScheme.error
         budget.progress > 0.85f -> Color(0xFFFFA000)
@@ -174,6 +189,7 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (budget.spentAmount > budget.amount && budget.amount > 0) MaterialTheme.colorScheme.error else LocalContentColor.current
                 )
+                // si hay un presupuesto establecido, se muestra la barra de progreso.
                 if (budget.amount > 0) {
                     LinearProgressIndicator(
                         progress = { budget.progress.coerceIn(0f, 1f) },
@@ -182,6 +198,7 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
                         trackColor = progressColor.copy(alpha = 0.3f)
                     )
                     val percentage = (budget.progress * 100).toInt()
+                    // se muestra un texto con el estado del presupuesto.
                     Text(
                         text = if (budget.progress > 1f) "Excedido en ${currencyFormat.format(budget.spentAmount - budget.amount)} (${percentage}%)"
                         else if (budget.progress > 0.85f) "Cercano al límite (${percentage}%)"
@@ -200,8 +217,11 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
     }
 }
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// este es el composable para el dialogo que permite establecer o editar un presupuesto.
 @Composable
 fun SetBudgetDialog(
     budgetInfo: Budget,
@@ -209,14 +229,14 @@ fun SetBudgetDialog(
     onDismiss: () -> Unit,
     onSetBudget: (categoryId: Int, amount: Double, monthYearStr: String) -> Unit
 ) {
-    // Estado para el valor numérico real (sin formato)
+    // estado para el valor numerico real (sin formato).
     var rawAmount by remember {
         mutableStateOf(
             if (budgetInfo.amount > 0) budgetInfo.amount.toLong().toString() else ""
         )
     }
 
-    // Estado para el valor formateado que se muestra
+    // estado para el valor formateado que se muestra.
     var formattedAmount by remember {
         mutableStateOf(
             if (budgetInfo.amount > 0) {
@@ -230,6 +250,7 @@ fun SetBudgetDialog(
     val monthDisplayFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
     val numberFormatter = NumberFormat.getNumberInstance(Locale.US)
 
+    // se muestra un dialogo.
     Dialog(onDismissRequest = onDismiss) {
         Card {
             Column(
@@ -251,21 +272,23 @@ fun SetBudgetDialog(
                     style = MaterialTheme.typography.titleMedium
                 )
 
+                // campo de texto para ingresar el monto del presupuesto.
                 OutlinedTextField(
                     value = formattedAmount,
+                    // logica para formatear el numero mientras se escribe.
                     onValueChange = { input ->
-                        // Remover todo lo que no sea dígito
+                        // remover todo lo que no sea digito.
                         val digitsOnly = input.replace(",", "").filter { it.isDigit() }
 
                         if (digitsOnly.isEmpty()) {
                             rawAmount = ""
                             formattedAmount = ""
                         } else {
-                            // Limitar a un máximo razonable (999,999,999,999)
+                            // limitar a un maximo razonable (999,999,999,999).
                             val numericValue = digitsOnly.take(12).toLongOrNull() ?: 0L
                             rawAmount = numericValue.toString()
 
-                            // Formatear con separadores de miles
+                            // formatear con separadores de miles.
                             formattedAmount = numberFormatter.format(numericValue)
                         }
                     },
@@ -276,6 +299,7 @@ fun SetBudgetDialog(
                     placeholder = { Text("0") }
                 )
 
+                // botones de accion del dialogo.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -286,6 +310,7 @@ fun SetBudgetDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                         val amount = rawAmount.toDoubleOrNull() ?: 0.0
+                        // se realizan las validaciones del monto.
                         when {
                             rawAmount.isEmpty() -> {
                                 Toast.makeText(context, "Por favor, ingrese un monto.", Toast.LENGTH_SHORT).show()
@@ -297,6 +322,7 @@ fun SetBudgetDialog(
                                 Toast.makeText(context, "El monto es demasiado grande.", Toast.LENGTH_SHORT).show()
                             }
                             else -> {
+                                // si todo es correcto, se llama a la funcion para guardar.
                                 onSetBudget(budgetInfo.categoryId, amount, monthYearStr)
                             }
                         }

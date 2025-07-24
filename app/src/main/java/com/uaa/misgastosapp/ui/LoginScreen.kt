@@ -31,24 +31,30 @@ import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
 import android.widget.Toast
 import androidx.compose.ui.text.style.TextAlign
 
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla (composable) de inicio de sesion.
 @Composable
 fun LoginScreen(
     navController: NavController,
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // se definen los estados para los campos del formulario y la visibilidad de la contraseña.
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
+    // se observa el estado de carga desde el viewmodel.
     val isLoading by authViewModel.isLoading.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
+    // se obtiene una instancia de 'sharedpreferences' para guardar las credenciales si el usuario lo desea.
     val sharedPreferences = remember {
         context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
     }
 
+    // este efecto se ejecuta una vez al crear la pantalla para cargar las credenciales guardadas.
     LaunchedEffect(Unit) {
         val savedEmail = sharedPreferences.getString("email", null)
         val savedPassword = sharedPreferences.getString("password", null)
@@ -59,12 +65,14 @@ fun LoginScreen(
         }
     }
 
+    // se usa el componente scaffold como contenedor principal de la pantalla.
     Scaffold { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // se usa una columna con scroll para que el contenido se ajuste en pantallas pequeñas.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -75,6 +83,7 @@ fun LoginScreen(
             ) {
                 Spacer(modifier = Modifier.height(40.dp))
 
+                // se muestra el logo de la aplicacion.
                 Image(
                     painter = painterResource(id = R.drawable.ic_launcher_foreground),
                     contentDescription = "Logo de Mis Gastos",
@@ -83,6 +92,7 @@ fun LoginScreen(
                         .padding(bottom = 16.dp)
                 )
 
+                // se muestra el nombre de la aplicacion y un eslogan.
                 Text(
                     text = "Mis Gastos",
                     style = MaterialTheme.typography.headlineLarge.copy(
@@ -101,6 +111,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // se agrupan los campos de texto y el boton en una tarjeta para un mejor diseño.
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -117,6 +128,7 @@ fun LoginScreen(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
+                        // campo de texto para el email o usuario.
                         OutlinedTextField(
                             value = email,
                             onValueChange = { email = it },
@@ -129,10 +141,12 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        // campo de texto para la contraseña.
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it },
                             label = { Text("Contraseña") },
+                            // se cambia la transformacion visual para ocultar o mostrar la contraseña.
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             trailingIcon = {
@@ -148,6 +162,7 @@ fun LoginScreen(
                             enabled = !isLoading
                         )
 
+                        // checkbox para la opcion de "recordar credenciales".
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -168,13 +183,15 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        // boton de inicio de sesion.
                         Button(
                             onClick = {
+                                // se llama al viewmodel para que inicie la sesion.
                                 authViewModel.login(
                                     email = email.trim(),
                                     password = password,
                                     onSuccess = {
-
+                                        // si el login es exitoso, se guardan o borran las credenciales segun la opcion del usuario.
                                         with(sharedPreferences.edit()) {
                                             if (rememberMe) {
                                                 putString("email", email)
@@ -185,12 +202,13 @@ fun LoginScreen(
                                             }
                                             apply()
                                         }
-
+                                        // se navega a la pantalla principal, limpiando la pantalla de login del historial.
                                         navController.navigate(Routes.HOME) {
                                             popUpTo(Routes.LOGIN) { inclusive = true }
                                         }
                                     },
                                     onError = { errorMsg ->
+                                        // si hay un error, se muestra un mensaje.
                                         Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                                     }
                                 )
@@ -200,6 +218,7 @@ fun LoginScreen(
                                 .height(50.dp),
                             enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
                         ) {
+                            // se muestra un indicador de carga dentro del boton si 'isloading' es verdadero.
                             if (isLoading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
@@ -214,6 +233,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // se muestra un texto informativo sobre la necesidad de conexion.
                 Text(
                     text = "Se requiere conexión a internet para iniciar sesión.",
                     style = MaterialTheme.typography.bodySmall,
@@ -222,6 +242,7 @@ fun LoginScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
 
+                // boton para navegar a la pantalla de registro.
                 TextButton(
                     onClick = { navController.navigate(Routes.REGISTER) },
                     enabled = !isLoading

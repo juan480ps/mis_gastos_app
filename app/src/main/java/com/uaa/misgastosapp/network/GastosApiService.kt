@@ -2,7 +2,12 @@
 
 package com.uaa.misgastosapp.network
 
-import com.uaa.misgastosapp.network.model.*
+import com.uaa.misgastosapp.model.LoginRequest
+import com.uaa.misgastosapp.model.LoginResponse
+import com.uaa.misgastosapp.model.LogoutResponse
+import com.uaa.misgastosapp.model.ProfileResponse
+import com.uaa.misgastosapp.model.RegisterRequest
+import com.uaa.misgastosapp.model.RegisterResponse
 import retrofit2.Response
 import retrofit2.http.*
 

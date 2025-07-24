@@ -32,8 +32,11 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.*
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla (composable) para añadir una nueva transaccion (gasto).
 @Composable
 fun AddTransactionScreen(
     navController: NavController,
@@ -41,9 +44,10 @@ fun AddTransactionScreen(
     categoryViewModel: CategoryViewModel = viewModel(),
     budgetViewModel: BudgetViewModel = viewModel()
 ) {
+    // se declaran los estados para los campos del formulario. 'remembersaveable' se usa para que los datos sobrevivan a cambios de configuracion.
     var title by rememberSaveable { mutableStateOf("") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var rawAmount by rememberSaveable { mutableStateOf("") }
+    var amount by rememberSaveable { mutableStateOf("") } // monto con formato de miles.
+    var rawAmount by rememberSaveable { mutableStateOf("") } // monto sin formato.
     var showError by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf("") }
     val categories by categoryViewModel.categories.collectAsState()
@@ -51,12 +55,14 @@ fun AddTransactionScreen(
     val selectedCategory = categories.find { it.id == selectedCategoryId }
     var categoryDropdownExpanded by rememberSaveable { mutableStateOf(false) }
 
+    // se configuran formatos de numeros y se obtienen instancias utiles.
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("es", "PY")).apply { maximumFractionDigits = 0 }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
+    // se usa el componente scaffold para la estructura basica de la pantalla.
     Scaffold(
         topBar = {
             TopAppBar(
@@ -75,6 +81,7 @@ fun AddTransactionScreen(
             )
         }
     ) { padding ->
+        // se usa una columna con scroll para el formulario.
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -83,7 +90,7 @@ fun AddTransactionScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
+            // campo de texto para la descripcion.
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -93,8 +100,10 @@ fun AddTransactionScreen(
                 singleLine = true
             )
 
+            // campo de texto para el monto.
             OutlinedTextField(
                 value = amount,
+                // logica para limpiar y formatear el monto mientras el usuario escribe.
                 onValueChange = { input ->
                     val cleanedInput = input.replace(",", "").filterIndexed { index, c ->
                         c.isDigit() || c == '.' || (c == '-' && index == 0)
@@ -117,6 +126,7 @@ fun AddTransactionScreen(
                 singleLine = true
             )
 
+            // menu desplegable para seleccionar la categoria.
             ExposedDropdownMenuBox(
                 expanded = categoryDropdownExpanded,
                 onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded },
@@ -153,6 +163,7 @@ fun AddTransactionScreen(
                             }
                         )
                     }
+                    // opcion para navegar a la pantalla de añadir nueva categoria.
                     DropdownMenuItem(
                         text = { Text("+ Añadir nueva categoría...", color = MaterialTheme.colorScheme.primary) },
                         onClick = {
@@ -163,6 +174,7 @@ fun AddTransactionScreen(
                 }
             }
 
+            // se muestra un mensaje de error si es necesario.
             if (showError) {
                 Text(
                     text = errorMessage,
@@ -171,11 +183,13 @@ fun AddTransactionScreen(
                 )
             }
 
+            // boton para guardar la transaccion.
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     val parsedAmount = rawAmount.toDoubleOrNull() ?: 0.0
 
+                    // se realizan las validaciones.
                     when {
                         title.isBlank() -> {
                             errorMessage = "La descripción no puede estar vacía."
@@ -188,9 +202,9 @@ fun AddTransactionScreen(
                         else -> {
                             showError = false
 
-
+                            // se inicia una corutina para realizar las operaciones.
                             coroutineScope.launch {
-
+                                // se añade la transaccion a traves del viewmodel.
                                 transactionViewModel.addTransaction(
                                     title = title,
                                     amount = parsedAmount,
@@ -198,13 +212,15 @@ fun AddTransactionScreen(
                                     categoryId = selectedCategoryId
                                 )
 
-
+                                // logica para revisar y mostrar alertas sobre el presupuesto.
                                 val currentExpenseAmount = if (parsedAmount < 0) parsedAmount * -1 else parsedAmount
                                 if (parsedAmount < 0 && selectedCategory != null) {
                                     val monthYearStr = YearMonth.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))
+                                    // se obtiene el presupuesto para la categoria y mes actuales.
                                     val budgetEntity = budgetViewModel.getBudgetForCategory(selectedCategory.id, monthYearStr).firstOrNull()
 
                                     if (budgetEntity != null && budgetEntity.amount > 0) {
+                                        // se calcula el gasto total en la categoria despues de esta nueva transaccion.
                                         val previousTransactions = transactionViewModel.transactions.firstOrNull() ?: emptyList()
                                         val spentBeforeThisTransaction = previousTransactions
                                             .filter {
@@ -216,6 +232,7 @@ fun AddTransactionScreen(
 
                                         val totalSpentAfterThisTransaction = spentBeforeThisTransaction + currentExpenseAmount
 
+                                        // se comprueba si se ha excedido el presupuesto.
                                         if (totalSpentAfterThisTransaction > budgetEntity.amount) {
                                             val exceededBy = totalSpentAfterThisTransaction - budgetEntity.amount
                                             Toast.makeText(
@@ -223,6 +240,7 @@ fun AddTransactionScreen(
                                                 "¡Alerta! Has excedido el presupuesto de ${selectedCategory.name} en ${currencyFormat.format(exceededBy)}",
                                                 Toast.LENGTH_LONG
                                             ).show()
+                                            // se comprueba si se ha gastado mas del 85% del presupuesto.
                                         } else if (totalSpentAfterThisTransaction > budgetEntity.amount * 0.85) {
                                             Toast.makeText(
                                                 context,
@@ -233,6 +251,7 @@ fun AddTransactionScreen(
                                     }
                                 }
 
+                                // se vuelve a la pantalla anterior.
                                 navController.popBackStack()
                             }
 

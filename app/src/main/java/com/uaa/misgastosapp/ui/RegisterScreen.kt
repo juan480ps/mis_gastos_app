@@ -28,13 +28,17 @@ import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla (composable) para el registro de nuevos usuarios.
 @Composable
 fun RegisterScreen(
     navController: NavController,
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // se definen los estados para los campos del formulario.
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -42,9 +46,11 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
+    // se observa el estado de carga desde el viewmodel.
     val isLoading by authViewModel.isLoading.collectAsState()
     val context = LocalContext.current
 
+    // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
         topBar = {
             TopAppBar(
@@ -57,6 +63,7 @@ fun RegisterScreen(
             )
         }
     ) { paddingValues ->
+        // se usa una columna con scroll para el formulario.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -72,6 +79,7 @@ fun RegisterScreen(
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
+            // campo de texto para el nombre completo.
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -83,6 +91,7 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // campo de texto para el email.
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
@@ -95,6 +104,7 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // campo de texto para el nombre de usuario.
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -106,6 +116,7 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // campo de texto para la contraseña.
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -123,11 +134,13 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isLoading,
+                // se muestra un texto de ayuda con los requisitos de la contraseña.
                 supportingText = { Text("Mínimo 8 caracteres, una mayúscula, una minúscula y un número") }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // campo de texto para confirmar la contraseña.
             OutlinedTextField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it },
@@ -149,8 +162,10 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            // boton de registro.
             Button(
                 onClick = {
+                    // se llama al viewmodel para registrar al usuario.
                     authViewModel.register(
                         name = name,
                         email = email,
@@ -158,12 +173,14 @@ fun RegisterScreen(
                         password = password,
                         confirmPassword = confirmPassword,
                         onSuccess = {
+                            // si el registro es exitoso, se muestra un mensaje y se navega a la pantalla de login.
                             Toast.makeText(context, "Registro exitoso. Por favor inicia sesión.", Toast.LENGTH_LONG).show()
                             navController.navigate(Routes.LOGIN) {
                                 popUpTo(Routes.REGISTER) { inclusive = true }
                             }
                         },
                         onError = { errorMsg ->
+                            // si hay un error, se muestra el mensaje.
                             Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                         }
                     )
@@ -171,6 +188,7 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isLoading
             ) {
+                // se muestra un indicador de carga si la operacion esta en curso.
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
