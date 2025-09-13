@@ -42,14 +42,19 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.Locale
 
+// se define una data class para los elementos de la barra de navegacion inferior.
 private data class BottomNavItem(
     val label: String,
     val icon: ImageVector,
     val route: String
 )
+// se suprime una advertencia sobre la indentacion que puede ser un falso positivo.
 @SuppressLint("SuspiciousIndentation")
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla principal (composable) de la aplicacion.
 @Composable
 fun HomeScreen(
     navController: NavController,
@@ -58,32 +63,38 @@ fun HomeScreen(
     recurringTransactionViewModel: RecurringTransactionViewModel = viewModel(),
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // se obtienen los estados desde los diferentes viewmodels.
     val transactions by transactionViewModel.transactions.collectAsState()
     val operationStatus by transactionViewModel.operationStatus.collectAsState()
-    val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState(initial = emptyList())
+    val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState()
     val currentYearMonth by budgetViewModel.currentMonthYear.collectAsState()
+    // se configuran formatos de moneda y fecha.
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("es", "PY")).apply {
         maximumFractionDigits = 0
     }
     val monthDisplayFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
     val monthHeaderFormatter = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale("es", "ES"))
+    // se definen estados para manejar dialogos y la visibilidad de las transacciones.
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
     var collapsedMonths by rememberSaveable { mutableStateOf(emptySet<YearMonth>()) }
 
-
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
+
+    // AQUÍ ESTÁ LA CORRECCIÓN: 'mutableStateOf' en lugar de 'mutableState of'
     var showDeleteTransactionDialog by rememberSaveable { mutableStateOf(false) }
 
     val userName = authViewModel.getCurrentUserName() ?: "Usuario"
-    val isOnline by authViewModel.isOnlineMode.collectAsState()
     val context = LocalContext.current
+
+    // se define la lista de elementos para la barra de navegacion inferior.
     val navigationItems = listOf(
-        BottomNavItem("Gráficos", Icons.Default.PieChart, Routes.CHARTS_SCREEN),
-        BottomNavItem("Recurrentes", Icons.Default.Autorenew, Routes.MANAGE_RECURRING_TRANSACTIONS),
-        BottomNavItem("Presupuestos", Icons.Default.Assessment, Routes.MANAGE_BUDGETS),
         BottomNavItem("Categorías", Icons.Default.Category, Routes.CATEGORIES_LIST),
+        BottomNavItem("Presupuestos", Icons.Default.Assessment, Routes.MANAGE_BUDGETS),
+        BottomNavItem("Recurrentes", Icons.Default.Autorenew, Routes.MANAGE_RECURRING_TRANSACTIONS),
+        BottomNavItem("Gráficos", Icons.Default.PieChart, Routes.CHARTS_SCREEN),
     )
 
+    // se observa el estado de las operaciones para mostrar mensajes.
     LaunchedEffect(operationStatus) {
         val status = operationStatus
         when (status) {
@@ -99,28 +110,22 @@ fun HomeScreen(
         }
     }
 
+    // este efecto se ejecuta una vez al crear la pantalla para procesar transacciones recurrentes vencidas.
     LaunchedEffect(Unit) {
         recurringTransactionViewModel.processDueRecurringTransactions()
     }
 
+    // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Hola, $userName") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isOnline) MaterialTheme.colorScheme.primary else Color.Gray,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
                 ),
                 actions = {
-                    if (!isOnline) {
-                        Text(
-                            "Modo Offline",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
                     IconButton(onClick = { showLogoutDialog = true }) {
                         Icon(Icons.Filled.ExitToApp, contentDescription = "Cerrar Sesión")
                     }
@@ -128,6 +133,7 @@ fun HomeScreen(
             )
         },
         bottomBar = {
+            // se define la barra de navegacion inferior.
             Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 NavigationBar(
                     modifier = Modifier.clip(RoundedCornerShape(24.dp)),
@@ -151,6 +157,7 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
+            // boton flotante para añadir nuevas transacciones.
             FloatingActionButton(
                 onClick = {
                     navController.navigate(Routes.ADD_TRANSACTION)
@@ -162,15 +169,18 @@ fun HomeScreen(
             }
         }
     ) { padding ->
+        // se usa una 'lazycolumn' para mostrar el contenido principal de forma eficiente.
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // se muestra una tarjeta con el resumen del saldo.
             item {
                 SummaryCard(balance = transactions.sumOf { it.amount })
             }
 
+            // se muestra un titulo para la seccion de presupuestos.
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -180,6 +190,7 @@ fun HomeScreen(
                 )
             }
 
+            // se muestran los presupuestos del mes.
             if (budgetsWithSpending.any { it.amount > 0 }) {
                 items(budgetsWithSpending.filter { it.amount > 0 }) { budgetItem ->
                     BudgetStatusItem(budgetItem, currencyFormat)
@@ -194,11 +205,13 @@ fun HomeScreen(
                 }
             }
 
+            // se muestra un titulo para las transacciones recientes.
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Transacciones Recientes", style = MaterialTheme.typography.titleMedium)
             }
 
+            // se muestra un indicador de carga si una operacion esta en curso.
             if (operationStatus is Result.Loading) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -207,6 +220,7 @@ fun HomeScreen(
                 }
             }
 
+            // se muestran las transacciones o un mensaje si no hay ninguna.
             if (transactions.isEmpty()) {
                 item {
                     Box(
@@ -220,7 +234,7 @@ fun HomeScreen(
                 }
             } else {
                 val dateParser = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-
+                // se agrupan las transacciones por mes y año.
                 val groupedTransactions = transactions
                     .groupBy {
                         try {
@@ -232,7 +246,9 @@ fun HomeScreen(
                     .filterKeys { it != null }
                     .toSortedMap(compareByDescending { it!! })
 
+                // se itera sobre los grupos para mostrar cada mes.
                 groupedTransactions.forEach { (yearMonth, monthTransactions) ->
+                    // se muestra una cabecera para cada mes, que es clickeable para expandir/colapsar.
                     item {
                         Row(
                             modifier = Modifier
@@ -271,12 +287,12 @@ fun HomeScreen(
                         }
                     }
 
+                    // si el mes no esta colapsado, se muestran sus transacciones.
                     if (yearMonth !in collapsedMonths) {
                         items(monthTransactions, key = { it.id }) { tx ->
                             TransactionItem(
                                 transaction = tx,
                                 onDelete = {
-
                                     transactionToDelete = tx
                                     showDeleteTransactionDialog = true
                                 }
@@ -288,6 +304,7 @@ fun HomeScreen(
         }
     }
 
+    // se muestra el dialogo de confirmacion para cerrar sesion.
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -298,6 +315,7 @@ fun HomeScreen(
                     onClick = {
                         showLogoutDialog = false
                         authViewModel.logout()
+                        // se navega a la pantalla de login, limpiando el historial de navegacion.
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(0) { inclusive = true }
                         }
@@ -314,6 +332,7 @@ fun HomeScreen(
         )
     }
 
+    // se muestra el dialogo de confirmacion para eliminar una transaccion.
     if (showDeleteTransactionDialog && transactionToDelete != null) {
         AlertDialog(
             onDismissRequest = {
@@ -347,8 +366,10 @@ fun HomeScreen(
     }
 }
 
+// este es un composable reutilizable para mostrar el estado de un presupuesto.
 @Composable
 fun BudgetStatusItem(budget: Budget, currencyFormat: NumberFormat) {
+    // el color de la barra de progreso cambia segun el porcentaje gastado.
     val progressColor = when {
         budget.progress > 1f -> MaterialTheme.colorScheme.error
         budget.progress == 1f -> Color(0xFFFFA000)
@@ -369,12 +390,14 @@ fun BudgetStatusItem(budget: Budget, currencyFormat: NumberFormat) {
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
+        // se muestra la barra de progreso lineal.
         LinearProgressIndicator(
             progress = { budget.progress.coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth(),
             color = progressColor,
             trackColor = progressColor.copy(alpha = 0.3f)
         )
+        // se muestran mensajes de alerta segun el estado del presupuesto.
         if (budget.progress > 1f) {
             Text(
                 "Excedido en ${currencyFormat.format(budget.spentAmount - budget.amount)}",

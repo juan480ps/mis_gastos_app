@@ -1,10 +1,11 @@
-// AddTRansactionScreen.kt
+// AddTransactionScreen.kt
 
 package com.uaa.misgastosapp.ui
 
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,8 +33,11 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.*
 
+// se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
+// se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
+// aca se define la pantalla (composable) para añadir una nueva transaccion.
 @Composable
 fun AddTransactionScreen(
     navController: NavController,
@@ -41,9 +45,16 @@ fun AddTransactionScreen(
     categoryViewModel: CategoryViewModel = viewModel(),
     budgetViewModel: BudgetViewModel = viewModel()
 ) {
+    // --- INICIO DE MODIFICACIONES ---
+
+    // 1. Se añade un estado para el tipo de transacción. Por defecto es "EGRESO".
+    var transactionType by rememberSaveable { mutableStateOf("EGRESO") }
+
+    // --- FIN DE MODIFICACIONES ---
+
     var title by rememberSaveable { mutableStateOf("") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var rawAmount by rememberSaveable { mutableStateOf("") }
+    var amount by rememberSaveable { mutableStateOf("") } // monto con formato de miles.
+    var rawAmount by rememberSaveable { mutableStateOf("") } // monto sin formato.
     var showError by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf("") }
     val categories by categoryViewModel.categories.collectAsState()
@@ -60,7 +71,8 @@ fun AddTransactionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agregar Gasto") },
+                // 2. Título actualizado para ser más genérico.
+                title = { Text("Agregar Transacción") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
@@ -83,6 +95,34 @@ fun AddTransactionScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // --- INICIO DE MODIFICACIONES ---
+
+            // 3. Selector de tipo de transacción (Ingreso/Egreso).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Botón de Egreso
+                Button(
+                    onClick = { transactionType = "EGRESO" },
+                    modifier = Modifier.weight(1f),
+                    colors = if (transactionType == "EGRESO") ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+                    border = if (transactionType == "EGRESO") null else ButtonDefaults.outlinedButtonBorder
+                ) {
+                    Text("Egreso")
+                }
+                // Botón de Ingreso
+                Button(
+                    onClick = { transactionType = "INGRESO" },
+                    modifier = Modifier.weight(1f),
+                    colors = if (transactionType == "INGRESO") ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
+                    border = if (transactionType == "INGRESO") null else ButtonDefaults.outlinedButtonBorder
+                ) {
+                    Text("Ingreso")
+                }
+            }
+
+            // --- FIN DE MODIFICACIONES ---
 
             OutlinedTextField(
                 value = title,
@@ -96,8 +136,9 @@ fun AddTransactionScreen(
             OutlinedTextField(
                 value = amount,
                 onValueChange = { input ->
-                    val cleanedInput = input.replace(",", "").filterIndexed { index, c ->
-                        c.isDigit() || c == '.' || (c == '-' && index == 0)
+                    // 4. Se elimina la lógica para aceptar el signo negativo. El usuario solo introduce números positivos.
+                    val cleanedInput = input.replace(",", "").filter { c ->
+                        c.isDigit() || c == '.'
                     }
                     rawAmount = cleanedInput
 
@@ -117,49 +158,52 @@ fun AddTransactionScreen(
                 singleLine = true
             )
 
-            ExposedDropdownMenuBox(
-                expanded = categoryDropdownExpanded,
-                onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = selectedCategory?.name ?: "Seleccionar Categoría",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Categoría") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
+            // El menú de categorías se muestra solo para egresos
+            AnimatedVisibility(visible = transactionType == "EGRESO") {
+                ExposedDropdownMenuBox(
                     expanded = categoryDropdownExpanded,
-                    onDismissRequest = { categoryDropdownExpanded = false },
+                    onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Sin Categoría") },
-                        onClick = {
-                            selectedCategoryId = null
-                            categoryDropdownExpanded = false
-                        }
+                    OutlinedTextField(
+                        value = selectedCategory?.name ?: "Seleccionar Categoría (Opcional)",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Categoría") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
                     )
-                    categories.forEach { category ->
+                    ExposedDropdownMenu(
+                        expanded = categoryDropdownExpanded,
+                        onDismissRequest = { categoryDropdownExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         DropdownMenuItem(
-                            text = { Text(category.name) },
+                            text = { Text("Sin Categoría") },
                             onClick = {
-                                selectedCategoryId = category.id
+                                selectedCategoryId = null
                                 categoryDropdownExpanded = false
                             }
                         )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("+ Añadir nueva categoría...", color = MaterialTheme.colorScheme.primary) },
-                        onClick = {
-                            categoryDropdownExpanded = false
-                            navController.navigate(Routes.ADD_CATEGORY)
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category.name) },
+                                onClick = {
+                                    selectedCategoryId = category.id
+                                    categoryDropdownExpanded = false
+                                }
+                            )
                         }
-                    )
+                        DropdownMenuItem(
+                            text = { Text("+ Añadir nueva categoría...", color = MaterialTheme.colorScheme.primary) },
+                            onClick = {
+                                categoryDropdownExpanded = false
+                                navController.navigate(Routes.ADD_CATEGORY)
+                            }
+                        )
+                    }
                 }
             }
 
@@ -182,25 +226,35 @@ fun AddTransactionScreen(
                             showError = true
                         }
                         parsedAmount == 0.0 -> {
-                            errorMessage = "El monto no puede ser cero."
+                            errorMessage = "El monto не puede ser cero."
                             showError = true
                         }
                         else -> {
                             showError = false
 
+                            // --- INICIO DE MODIFICACIONES ---
+
+                            // 5. Se determina el monto final a guardar.
+                            // Si es "EGRESO", se multiplica por -1 para hacerlo negativo.
+                            // Si es "INGRESO", se mantiene positivo.
+                            val finalAmount = if (transactionType == "EGRESO") -parsedAmount else parsedAmount
+
+                            // Si es un ingreso, la categoría no es relevante, se pasa null.
+                            val finalCategoryId = if (transactionType == "INGRESO") null else selectedCategoryId
+
+                            // --- FIN DE MODIFICACIONES ---
 
                             coroutineScope.launch {
-
+                                // 6. Se envía el monto y la categoría final al ViewModel.
                                 transactionViewModel.addTransaction(
                                     title = title,
-                                    amount = parsedAmount,
+                                    amount = finalAmount,
                                     date = LocalDate.now().toString(),
-                                    categoryId = selectedCategoryId
+                                    categoryId = finalCategoryId
                                 )
 
-
-                                val currentExpenseAmount = if (parsedAmount < 0) parsedAmount * -1 else parsedAmount
-                                if (parsedAmount < 0 && selectedCategory != null) {
+                                // La lógica de alerta de presupuesto solo se aplica a los egresos.
+                                if (transactionType == "EGRESO" && selectedCategory != null) {
                                     val monthYearStr = YearMonth.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))
                                     val budgetEntity = budgetViewModel.getBudgetForCategory(selectedCategory.id, monthYearStr).firstOrNull()
 
@@ -214,7 +268,8 @@ fun AddTransactionScreen(
                                             }
                                             .sumOf { it.amount * -1 }
 
-                                        val totalSpentAfterThisTransaction = spentBeforeThisTransaction + currentExpenseAmount
+                                        // Se usa el monto positivo para el cálculo
+                                        val totalSpentAfterThisTransaction = spentBeforeThisTransaction + parsedAmount
 
                                         if (totalSpentAfterThisTransaction > budgetEntity.amount) {
                                             val exceededBy = totalSpentAfterThisTransaction - budgetEntity.amount

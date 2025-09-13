@@ -8,104 +8,81 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
 import com.uaa.misgastosapp.data.AppDatabase
 import com.uaa.misgastosapp.data.repository.AuthRepository
-import com.uaa.misgastosapp.network.NetworkModule
-import com.uaa.misgastosapp.network.model.ErrorResponse
 import com.uaa.misgastosapp.utils.SecureSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
-import kotlinx.coroutines.delay
 
+// aca se define el viewmodel para la autenticacion. se encarga de toda la logica de negocio
+// relacionada con el inicio de sesion, registro y estado de la sesion del usuario de forma local.
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
+    // se crea una instancia del gestor de sesiones seguras.
     private val sessionManager = SecureSessionManager(application)
+    // se declara el repositorio de autenticacion, que sera la unica fuente de datos.
     private val authRepository: AuthRepository
 
+    // el bloque 'init' se ejecuta cuando se crea una instancia de este viewmodel.
     init {
+        // se obtiene la instancia de la base de datos.
         val db = AppDatabase.getInstance(application)
+        // se inicializa el repositorio de autenticacion, pasandole el dao de usuario y el gestor de sesiones.
         authRepository = AuthRepository(
             userDao = db.userDao(),
             sessionManager = this.sessionManager
         )
     }
 
+    // se crea un 'stateflow' para saber si el usuario ha iniciado sesion. es privado para que solo el viewmodel lo pueda modificar.
     private val _isLoggedIn = MutableStateFlow(sessionManager.isLoggedIn())
+    // esta es la version publica y de solo lectura del estado de la sesion, para que la interfaz la observe.
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    // se crea un estado para controlar si se esta mostrando una pantalla de carga.
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _isOnlineMode = MutableStateFlow(true)
-    val isOnlineMode: StateFlow<Boolean> = _isOnlineMode.asStateFlow()
-
+    // esta es la funcion principal para iniciar sesion de forma local.
     fun login(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        // se inicia una corutina en el ambito del viewmodel, para no bloquear la interfaz de usuario.
         viewModelScope.launch {
+            // se activa el estado de carga.
             _isLoading.value = true
             try {
+                // se comprueba que los campos no esten vacios.
                 if (email.isBlank() || password.isBlank()) {
                     onError("Por favor completa todos los campos")
                     return@launch
                 }
-
-                if (_isOnlineMode.value) {
-                    try {
-                        val loginResponse = authRepository.loginApi(email, password)
-                        val token = loginResponse.accessToken
-                        sessionManager.saveToken(token)
-                        NetworkModule.updateApiClient()
-                        delay(200)
-                        val profileResponse = authRepository.getProfileApi()
-                        authRepository.saveUserFromProfile(profileResponse, password, token)
-                        _isLoggedIn.value = true
-                        _isOnlineMode.value = true
-                        onSuccess()
-
-                    } catch (e: UnknownHostException) {
-                        Log.e("AuthVM", "Sin conexión, intentando login offline.", e)
-                        _isOnlineMode.value = false
-                        performOfflineLogin(email, password, onSuccess, onError)
-                    } catch (e: SocketTimeoutException) {
-                        Log.e("AuthVM", "Timeout, intentando login offline.", e)
-                        _isOnlineMode.value = false
-                        performOfflineLogin(email, password, onSuccess, onError)
-                    } catch (e: Exception) {
-                        Log.e("AuthVM", "Error en login online: ${e.message}", e)
-                        onError(parseApiErrorMessage(e.message ?: "Ocurrió un error inesperado"))
-                    }
-                } else {
-                    performOfflineLogin(email, password, onSuccess, onError)
-                }
+                // se llama a la función de login local del repositorio
+                authRepository.login(email, password)
+                _isLoggedIn.value = true
+                onSuccess()
+            } catch (e: Exception) {
+                // si hay un error, se muestra un mensaje.
+                Log.e("AuthVM", "Error en login local: ${e.message}", e)
+                onError(e.message ?: "Ocurrió un error inesperado")
             } finally {
+                // al final, pase lo que pase, se desactiva el estado de carga.
                 _isLoading.value = false
             }
         }
     }
 
-    private suspend fun performOfflineLogin(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        try {
-            authRepository.loginOffline(email, password)
-            _isLoggedIn.value = true
-            onSuccess()
-        } catch (e: Exception) {
-            Log.e("AuthVM", "Error en login offline: ${e.message}", e)
-            onError(e.message ?: "Error desconocido en modo offline")
-        }
-    }
-
+    // se asegura que este codigo solo se ejecute en versiones de android compatibles.
     @RequiresApi(Build.VERSION_CODES.O)
+    // esta es la funcion principal para registrar un nuevo usuario de forma local.
     fun register(name: String, email: String, username: String, password: String, confirmPassword: String,
                  onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // se realizan varias validaciones sobre los datos de entrada.
                 when {
-                    name.isBlank() || email.isBlank() || username.isBlank() || password.isBlank() ->
-                        onError("Por favor completa todos los campos")
+                    name.isBlank() || email.isBlank() || password.isBlank() ->
+                        onError("Por favor completa nombre, email y contraseña")
                     password != confirmPassword ->
                         onError("Las contraseñas no coinciden")
                     !isPasswordValid(password) ->
@@ -113,65 +90,42 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     !isValidEmail(email) ->
                         onError("Email inválido")
                     else -> {
-                        authRepository.register(name, email, username, password)
+                        // El username se ignora en el repositorio local, pero se mantiene en la firma
+                        authRepository.register(name, email, password)
                         onSuccess()
                     }
                 }
             } catch (e: Exception) {
-                Log.e("AuthVM", "Error en registro: ${e.message}", e)
-                onError(parseApiErrorMessage(e.message ?: "Ocurrió un error inesperado"))
+                // si ocurre un error, se muestra el mensaje directamente.
+                Log.e("AuthVM", "Error en registro local: ${e.message}", e)
+                onError(e.message ?: "Ocurrió un error inesperado")
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
+    // esta es la funcion para cerrar la sesion del usuario.
     fun logout() {
         viewModelScope.launch {
             try {
+                // se llama al metodo de logout del repositorio (que ahora es solo local).
                 authRepository.logout()
-                _isLoggedIn.value = false
-                _isOnlineMode.value = true
-                delay(100)
-                NetworkModule.clearAuthentication()
-
             } catch (e: Exception) {
-                Log.e("AuthVM", "Error durante logout: ${e.message}", e)
-
-                _isLoggedIn.value = false
-                _isOnlineMode.value = true
+                Log.e("AuthVM", "Error durante logout local: ${e.message}", e)
+            } finally {
+                // se asegura de limpiar el estado de la sesion en cualquier caso.
                 sessionManager.logout()
-                NetworkModule.clearAuthentication()
+                _isLoggedIn.value = false
             }
         }
     }
 
-    private fun parseApiErrorMessage(rawMessage: String): String {
-        return try {
-            if (rawMessage.contains("{") && rawMessage.contains("}")) {
-                val jsonStart = rawMessage.indexOf("{")
-                val jsonEnd = rawMessage.lastIndexOf("}") + 1
-                val jsonString = rawMessage.substring(jsonStart, jsonEnd)
-                val error = Gson().fromJson(jsonString, ErrorResponse::class.java)
-                error.msg ?: error.error ?: "Error del servidor"
-            } else {
-                when {
-                    rawMessage.contains("401") -> "Credenciales inválidas"
-                    rawMessage.contains("409") -> "El email o usuario ya existe"
-                    rawMessage.contains("500") -> "Error del servidor"
-                    rawMessage.contains("404") -> "Servicio no disponible"
-                    else -> "Ocurrió un error inesperado"
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AuthVM", "Error parsing error message: ${e.message}")
-            "Ocurrió un error inesperado"
-        }
-    }
-
+    // funciones para obtener datos del usuario actual desde el gestor de sesiones.
     fun getCurrentUserName(): String? = sessionManager.getUserName()
     fun getCurrentUserId(): Int = sessionManager.getUserId()
 
+    // funciones de validacion privadas.
     private fun isValidEmail(email: String): Boolean = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     private fun isPasswordValid(password: String): Boolean = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}$".toRegex().matches(password)
 }
