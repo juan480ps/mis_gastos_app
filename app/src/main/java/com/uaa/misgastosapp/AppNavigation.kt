@@ -1,25 +1,22 @@
-// AppNavigation
-
 package com.uaa.misgastosapp
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.uaa.misgastosapp.ui.*
-import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
+import com.uaa.misgastosapp.ui.isOnboardingCompleted
 
-// se crea un objeto para guardar las "direcciones" de todas las pantallas.
-// se hace de esta forma para evitar errores de escritura en el codigo.
+/**
+ * Rutas de navegación de la aplicación.
+ */
 object Routes {
+    const val ONBOARDING = "onboarding"
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val HOME = "home"
@@ -33,39 +30,49 @@ object Routes {
     const val CHARTS_SCREEN = "charts_screen"
 }
 
-// se asegura que este codigo solo se ejecute en versiones de android compatibles.
+/**
+ * Navegación principal de la aplicación.
+ * Muestra onboarding la primera vez, luego va al Home.
+ */
 @RequiresApi(Build.VERSION_CODES.O)
-// esta es la funcion principal que se encarga de organizar la navegacion en la aplicacion.
 @Composable
 fun AppNavigation(navController: NavHostController) {
-    // se obtiene el viewmodel de autenticacion, que sabe si el usuario inicio sesion.
-    val authViewModel: AuthViewModel = viewModel()
-    // se crea una variable que observa si el usuario esta logueado o no. se actualiza sola.
-    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-
-    // se decide cual sera la primera pantalla. si el usuario ya inicio sesion, es 'home', si no, 'login'.
-    val startDestination = if (isLoggedIn) Routes.HOME else Routes.LOGIN
-
-    // este bloque de codigo se ejecuta solo cuando el valor de 'isloggedin' cambia.
-    LaunchedEffect(isLoggedIn) {
-        // se comprueba si el usuario cerro sesion y no esta en una pantalla publica (login o registro).
-        if (!isLoggedIn && navController.currentDestination?.route != Routes.LOGIN &&
-            navController.currentDestination?.route != Routes.REGISTER) {
-            // si la condicion se cumple, se navega a la pantalla de login.
-            navController.navigate(Routes.LOGIN) {
-                // se borra el historial de pantallas para que no se pueda volver atras.
-                popUpTo(0) { inclusive = true }
-            }
+    val context = LocalContext.current
+    
+    // Verificar si es la primera vez que el usuario abre la app
+    var startDestination by remember { mutableStateOf<String?>(null) }
+    
+    // Determinar destino inicial basado en onboarding
+    LaunchedEffect(Unit) {
+        startDestination = if (isOnboardingCompleted(context)) {
+            Routes.HOME
+        } else {
+            Routes.ONBOARDING
         }
     }
 
-    // aca se configura el mapa de navegacion. se indica el controlador y la pantalla de inicio.
-    NavHost(navController = navController, startDestination = startDestination) {
-        // se define que cuando se navegue a la ruta 'login', se muestre la pantalla 'loginscreen'.
+    // Mostrar loading mientras se determina el destino
+    if (startDestination == null) {
+        return
+    }
+
+    NavHost(navController = navController, startDestination = startDestination!!) {
+        // Onboarding (solo la primera vez)
+        composable(Routes.ONBOARDING) {
+            OnboardingScreen(
+                onFinish = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Login y Registro (opcionales)
         composable(Routes.LOGIN) { LoginScreen(navController) }
         composable(Routes.REGISTER) { RegisterScreen(navController) }
 
-        // aca se definen las rutas para las pantallas que necesitan que el usuario este logueado.
+        // Pantalla principal
         composable(Routes.HOME) { HomeScreen(navController) }
         composable(Routes.ADD_TRANSACTION) { AddTransactionScreen(navController) }
         composable(Routes.ADD_CATEGORY) { AddCategoryScreen(navController) }
@@ -73,30 +80,27 @@ fun AppNavigation(navController: NavHostController) {
         composable(Routes.MANAGE_BUDGETS) { ManageBudgetsScreen(navController) }
         composable(Routes.MANAGE_RECURRING_TRANSACTIONS) { ManageRecurringTransactionsScreen(navController) }
 
-        // esta es una ruta especial para agregar o editar transacciones recurrentes.
-        // puede recibir un numero (id de la transaccion) al final de la direccion.
+        // Agregar/Editar transacción recurrente
         composable(
             route = "${Routes.ADD_EDIT_RECURRING_TRANSACTION}/{${Routes.ARG_RECURRING_TRANSACTION_ID}}",
-            // aca se define que el id es un numero y que si no se envia, su valor por defecto es -1.
             arguments = listOf(navArgument(Routes.ARG_RECURRING_TRANSACTION_ID) {
                 type = NavType.IntType
                 defaultValue = -1
             })
         ) { backStackEntry ->
-            // se obtiene el id que se paso en la ruta.
             val transactionId = backStackEntry.arguments?.getInt(Routes.ARG_RECURRING_TRANSACTION_ID)
-            // se muestra la pantalla de agregar/editar, pasandole el id si es que existe.
             AddEditRecurringTransactionScreen(
                 navController = navController,
                 recurringTransactionId = if (transactionId == -1) null else transactionId
             )
         }
 
-        // esta es la misma pantalla pero para cuando se quiere agregar una nueva transaccion (sin pasarle un id).
+        // Nueva transacción recurrente
         composable(Routes.ADD_EDIT_RECURRING_TRANSACTION) {
             AddEditRecurringTransactionScreen(navController = navController, recurringTransactionId = null)
         }
-        // aca se define la ruta para la pantalla de graficos.
+
+        // Gráficos
         composable(Routes.CHARTS_SCREEN) { ChartsScreen(navController) }
     }
 }

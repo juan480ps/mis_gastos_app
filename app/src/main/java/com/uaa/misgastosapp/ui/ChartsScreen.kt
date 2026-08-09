@@ -9,7 +9,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -66,12 +66,12 @@ fun ChartsScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 // se añade un navegador de meses en la barra de acciones.
                 actions = {
-                    MonthNavigator_(
+                    MonthNavigator(
                         currentYearMonth = currentYearMonth,
                         onPreviousMonth = { chartsViewModel.setCurrentMonthYear(currentYearMonth.minusMonths(1)) },
                         onNextMonth = { chartsViewModel.setCurrentMonthYear(currentYearMonth.plusMonths(1)) }
@@ -197,26 +197,3 @@ fun MPAndroidPieChart(pieChartDataList: List<PieChartData>) {
     )
 }
 
-// se asegura que el codigo use apis disponibles a partir de android oreo.
-@RequiresApi(Build.VERSION_CODES.O)
-// este es un composable reutilizable para navegar entre meses.
-@Composable
-fun MonthNavigator_(
-    currentYearMonth: YearMonth,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onPreviousMonth) {
-            Text("<", style = MaterialTheme.typography.titleMedium)
-        }
-        Text(
-            text = currentYearMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        )
-        IconButton(onClick = onNextMonth) {
-            Text(">", style = MaterialTheme.typography.titleMedium)
-        }
-    }
-}

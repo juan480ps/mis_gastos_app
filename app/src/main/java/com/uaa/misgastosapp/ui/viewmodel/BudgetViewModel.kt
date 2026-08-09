@@ -39,25 +39,19 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     // esta es la version publica y de solo lectura del estado del mes/año, para que la interfaz lo observe.
     val currentMonthYear: StateFlow<YearMonth> = _currentMonthYear.asStateFlow()
 
-    // aca se crea un flujo que transforma el objeto 'yearmonth' a un texto con formato "yyyy-mm".
-    // este formato es el que se usa en la base de datos para las consultas.
-    private val currentMonthYearString: Flow<String> = _currentMonthYear.map {
-        it.format(DateTimeFormatter.ofPattern("yyyy-MM"))
-    }
+    // aca se crea un flujo que transforma el objeto 'yearmonth' a un texto con formato "yyyy-MM".
+    private val currentMonthYearString: Flow<String> = _currentMonthYear
+        .map { it.format(DateTimeFormatter.ofPattern("yyyy-MM")) }
+        .distinctUntilChanged() // solo emite si el mes realmente cambio
 
     // este es el 'stateflow' principal que la interfaz de usuario observara para mostrar la lista de presupuestos.
     val budgetsWithSpendingForCurrentMonth: StateFlow<List<Budget>> =
-        // se llama al repositorio para obtener el flujo de presupuestos y gastos para el mes actual.
         repository.getBudgetsWithSpendingForMonth(currentMonthYearString)
-            // se añade un bloque 'catch' para atrapar y registrar cualquier error que ocurra en el flujo.
+            .distinctUntilChanged() // evita recomposiciones si los datos no cambiaron
             .catch { e ->
                 Log.e("BudgetVM", "Error en el flujo de presupuestos", e)
-                // si hay un error, se emite una lista vacia para no bloquear la app.
                 emit(emptyList())
             }
-            // se convierte el flujo "frio" en un flujo "caliente" (stateflow).
-            // se mantiene activo durante 5 segundos despues de que el ultimo observador se va.
-            // el valor inicial es una lista vacia.
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // esta funcion permite que la interfaz de usuario cambie el mes y año que se esta mostrando.

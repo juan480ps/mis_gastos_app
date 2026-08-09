@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -56,7 +56,7 @@ fun ManageRecurringTransactionsScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -125,8 +125,8 @@ fun RecurringTransactionListItem(
                 // se muestra la informacion de la transaccion.
                 Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    // se ajusta el texto para que siempre se muestre como gasto, independientemente del signo del monto.
-                    "${if (item.amount < 0) "Ingreso" else "Gasto"}: ${currencyFormat.format(item.amount.let { if(it < 0) it * -1 else it })}",
+                    // monto negativo = gasto, monto positivo = ingreso.
+                    "${if (item.amount < 0) "Gasto" else "Ingreso"}: ${currencyFormat.format(item.amount.let { if(it < 0) it * -1 else it })}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text("Categoría: ${item.categoryName}", style = MaterialTheme.typography.bodySmall)

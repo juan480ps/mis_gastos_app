@@ -105,11 +105,14 @@ class AuthRepository(
 
     // esta funcion permite iniciar sesion sin conexion a internet, usando los datos guardados localmente.
     suspend fun loginOffline(email: String, password: String): UserEntity {
-        // se encripta la contraseña ingresada para compararla con la que esta guardada.
-        val hashedPassword = hashPassword(password)
-        // se busca al usuario en la base de datos local. si no se encuentra, se lanza un error.
-        val user = userDao.login(email.lowercase(), hashedPassword)
+        // se busca al usuario por email en la base de datos local.
+        val user = userDao.getUserByEmail(email.lowercase())
             ?: throw Exception("Credenciales inválidas (modo offline)")
+
+        // se verifica si la contraseña ingresada coincide con el hash guardado.
+        if (!verifyPassword(password, user.password)) {
+            throw Exception("Credenciales inválidas (modo offline)")
+        }
 
         // si las credenciales son correctas, se guarda una sesion local con un token especial de "modo offline".
         sessionManager.saveUserSession(
@@ -144,13 +147,26 @@ class AuthRepository(
 
         // si el registro en el servidor es exitoso, se guarda el nuevo usuario en la base de datos local.
         val hashedPassword = hashPassword(password)
-        val newUser = UserEntity(
-            email = email.lowercase(),
-            password = hashedPassword,
-            name = name,
-            createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) // se guarda la fecha actual.
-        )
-        userDao.insert(newUser)
+        val emailLower = email.lowercase()
+        // se busca si el usuario ya existe localmente.
+        val existingUser = userDao.getUserByEmail(emailLower)
+        if (existingUser != null) {
+            // si ya existe, se actualizan sus datos.
+            val updatedUser = existingUser.copy(
+                password = hashedPassword,
+                name = name
+            )
+            userDao.update(updatedUser)
+        } else {
+            // si no existe, se crea un nuevo usuario.
+            val newUser = UserEntity(
+                email = emailLower,
+                password = hashedPassword,
+                name = name,
+                createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            )
+            userDao.insert(newUser)
+        }
     }
 
     // esta funcion se encarga de cerrar la sesion del usuario.
@@ -172,11 +188,35 @@ class AuthRepository(
         }
     }
 
-    // esta es una funcion privada que se usa para encriptar contraseñas.
+    // esta funcion se usa para encriptar contraseñas con PBKDF2 y salt aleatorio.
     private fun hashPassword(password: String): String {
-        // se usa el algoritmo sha-256 para crear un hash seguro de la contraseña.
-        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
-        // se convierte el resultado a un formato de texto hexadecimal.
-        return bytes.fold("") { str, it -> str + "%02x".format(it) }
+        // se genera un salt aleatorio de 16 bytes.
+        val salt = ByteArray(16)
+        java.security.SecureRandom().nextBytes(salt)
+        // se usa PBKDF2 con HMAC-SHA256, 100000 iteraciones, y 256 bits de salida.
+        val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 100000, 256)
+        val hash = factory.generateSecret(spec).encoded
+        // se convierten salt y hash a hexadecimal.
+        val saltHex = salt.joinToString("") { "%02x".format(it) }
+        val hashHex = hash.joinToString("") { "%02x".format(it) }
+        // se guardan juntos separados por dos puntos para poder verificar despues.
+        return "$saltHex:$hashHex"
+    }
+
+    // esta funcion verifica si una contraseña coincide con un hash guardado.
+    private fun verifyPassword(password: String, storedHash: String): Boolean {
+        // se separa el salt y el hash del valor guardado.
+        val parts = storedHash.split(":")
+        if (parts.size != 2) return false
+        // se convierte el salt de hexadecimal a bytes.
+        val salt = parts[0].chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        // se calcula el hash de la contraseña ingresada con el mismo salt y parametros.
+        val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 100000, 256)
+        val hash = factory.generateSecret(spec).encoded
+        val hashHex = hash.joinToString("") { "%02x".format(it) }
+        // se compara el hash calculado con el hash guardado.
+        return hashHex == parts[1]
     }
 }

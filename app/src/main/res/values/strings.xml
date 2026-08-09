@@ -1,3 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Mis Gastos App</string>
+    <string name="app_name">My Expenses</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start">Get Started!</string>
+    <string name="onboarding_title_1">Track Your Expenses</string>
+    <string name="onboarding_desc_1">Record your income and expenses easily and quickly. Never lose control of your money.</string>
+    <string name="onboarding_title_2">Visualize Your Money</string>
+    <string name="onboarding_desc_2">Intuitive charts show where your money goes. Identify patterns and make better decisions.</string>
+    <string name="onboarding_title_3">Set Goals</string>
+    <string name="onboarding_desc_3">Create budgets by category and achieve your savings goals.</string>
+    <string name="onboarding_title_4">Recurring Expenses</string>
+    <string name="onboarding_desc_4">Automate your fixed expenses like rent, services and subscriptions.</string>
+    <string name="onboarding_title_5">Sync to the Cloud</string>
+    <string name="onboarding_desc_5">Sign in with Google to sync your data across all your devices.</string>
+    
+    <!-- Home -->
+    <string name="home_title">My Expenses</string>
+    <string name="home_greeting">Hello,</string>
+    <string name="home_guest">Guest</string>
+    <string name="home_income">Income</string>
+    <string name="home_expenses">Expenses</string>
+    <string name="home_balance">Balance</string>
+    
+    <!-- Transactions -->
+    <string name="transaction_add">Add Transaction</string>
+    <string name="transaction_income">Income</string>
+    <string name="transaction_expense">Expense</string>
+    <string name="transaction_title">Title</string>
+    <string name="transaction_amount">Amount</string>
+    <string name="transaction_date">Date</string>
+    <string name="transaction_category">Category</string>
+    <string name="transaction_save">Save</string>
+    <string name="transaction_delete">Delete</string>
+    
+    <!-- Categories -->
+    <string name="categories_title">Categories</string>
+    <string name="category_add">Add Category</string>
+    <string name="category_name">Name</string>
+    
+    <!-- Budgets -->
+    <string name="budgets_title">Budgets</string>
+    <string name="budget_add">Add Budget</string>
+    <string name="budget_spent">Spent</string>
+    <string name="budget_remaining">Remaining</string>
+    
+    <!-- Recurring -->
+    <string name="recurring_title">Recurring Expenses</string>
+    <string name="recurring_add">Add Recurring</string>
+    
+    <!-- Charts -->
+    <string name="charts_title">Charts</string>
+    
+    <!-- Login -->
+    <string name="login_title">Sign In</string>
+    <string name="login_google">Continue with Google</string>
+    <string name="login_guest">Use without account</string>
+    
+    <!-- Common -->
+    <string name="loading">Loading...</string>
+    <string name="error">Error</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="delete_confirm">Are you sure you want to delete?</string>
 </resources>

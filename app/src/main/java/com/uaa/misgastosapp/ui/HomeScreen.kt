@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -81,7 +82,8 @@ fun HomeScreen(
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
     var showDeleteTransactionDialog by rememberSaveable { mutableStateOf(false) }
 
-    val userName = authViewModel.getCurrentUserName() ?: "Usuario"
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val userName = if (isLoggedIn) authViewModel.getCurrentUserName() ?: "Usuario" else "Invitado"
     val isOnline by authViewModel.isOnlineMode.collectAsState()
     val context = LocalContext.current
 
@@ -109,11 +111,6 @@ fun HomeScreen(
         }
     }
 
-    // este efecto se ejecuta una vez al crear la pantalla para procesar transacciones recurrentes vencidas.
-    LaunchedEffect(Unit) {
-        recurringTransactionViewModel.processDueRecurringTransactions()
-    }
-
     // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
         topBar = {
@@ -135,7 +132,11 @@ fun HomeScreen(
                         )
                     }
                     IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(Icons.Filled.ExitToApp, contentDescription = "Cerrar Sesión")
+                        if (isLoggedIn) {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Cerrar Sesión")
+                        } else {
+                            Icon(Icons.Default.Person, contentDescription = "Iniciar Sesión")
+                        }
                     }
                 }
             )
@@ -281,7 +282,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.weight(1f)
                             )
-                            Divider(
+                            HorizontalDivider(
                                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                                 modifier = Modifier.weight(1f)
                             )
@@ -312,32 +313,53 @@ fun HomeScreen(
         }
     }
 
-    // se muestra el dialogo de confirmacion para cerrar sesion.
+    // se muestra el dialogo segun el estado de sesion.
     if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Cerrar Sesión") },
-            text = { Text("¿Estás seguro de que deseas cerrar sesión?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutDialog = false
-                        authViewModel.logout()
-                        // se navega a la pantalla de login, limpiando el historial de navegacion.
-                        navController.navigate(Routes.LOGIN) {
-                            popUpTo(0) { inclusive = true }
+        if (isLoggedIn) {
+            // dialogo para cerrar sesion.
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                title = { Text("Cerrar Sesión") },
+                text = { Text("¿Estás seguro de que deseas cerrar sesión?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
+                            authViewModel.logout()
                         }
+                    ) {
+                        Text("Sí")
                     }
-                ) {
-                    Text("Sí")
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutDialog = false }) {
+                        Text("Cancelar")
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancelar")
+            )
+        } else {
+            // dialogo para iniciar sesion (opcional).
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                title = { Text("Iniciar Sesión") },
+                text = { Text("¿Deseas iniciar sesión para sincronizar tus datos con la nube?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
+                            navController.navigate(Routes.LOGIN)
+                        }
+                    ) {
+                        Text("Iniciar Sesión")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutDialog = false }) {
+                        Text("Usar sin sesión")
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     // se muestra el dialogo de confirmacion para eliminar una transaccion.

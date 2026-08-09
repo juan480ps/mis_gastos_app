@@ -7,12 +7,14 @@ import com.uaa.misgastosapp.data.BudgetEntity
 import com.uaa.misgastosapp.data.CategoryDao
 import com.uaa.misgastosapp.data.TransactionDao
 import com.uaa.misgastosapp.model.Budget
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 
 // esta clase es la encargada de manejar la logica de los presupuestos.
 // se comunica con las tablas de presupuestos, categorias y transacciones para obtener datos completos.
+@OptIn(ExperimentalCoroutinesApi::class)
 class BudgetRepository(
     private val budgetDao: BudgetDao,
     private val categoryDao: CategoryDao,
@@ -27,12 +29,8 @@ class BudgetRepository(
             combine(
                 categoryDao.getAll(),
                 budgetDao.getBudgetsForMonth(monthStr),
-                transactionDao.getAll()
-            ) { categoriesEntities, budgetEntities, transactionEntities ->
-                // primero, se filtran las transacciones para quedarse solo con los gastos del mes actual.
-                val transactionsForMonth = transactionEntities.filter {
-                    it.date.startsWith(monthStr) && it.amount < 0
-                }
+                transactionDao.getExpensesForMonth("$monthStr%")
+            ) { categoriesEntities, budgetEntities, transactionsForMonth ->
 
                 // despues, se recorre la lista de todas las categorias.
                 categoriesEntities.map { categoryEntity ->

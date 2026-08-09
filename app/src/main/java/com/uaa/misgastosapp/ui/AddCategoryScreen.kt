@@ -5,7 +5,7 @@ package com.uaa.misgastosapp.ui
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -45,7 +45,7 @@ fun AddCategoryScreen(navController: NavController, categoryViewModel: CategoryV
                 navigationIcon = {
                     // al hacer clic en el boton, se navega a la pantalla anterior.
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )

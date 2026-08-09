@@ -12,7 +12,8 @@ import com.uaa.misgastosapp.data.AppDatabase
 import com.uaa.misgastosapp.data.repository.TransactionRepository
 import com.uaa.misgastosapp.model.Transaction
 import com.uaa.misgastosapp.utils.Result
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         // se obtiene la instancia de la base de datos.
         val db = AppDatabase.getInstance(application)
         // se inicializa el repositorio, pasandole los daos necesarios.
-        repository = TransactionRepository(db.transactionDao(), db.categoryDao())
+        repository = TransactionRepository(db.transactionDao())
     }
 
     // se crea un 'stateflow' para comunicar el estado de una operacion (como agregar o borrar).
@@ -42,9 +43,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     val operationStatus: StateFlow<Result<String>?> = _operationStatus.asStateFlow()
 
     // este 'stateflow' expone la lista de todas las transacciones desde el repositorio.
-    // la interfaz lo observara para mostrar el historial de transacciones.
     val transactions: StateFlow<List<Transaction>> = repository.allTransactions
-        // se convierte el flujo en un 'stateflow' que se mantiene activo mientras haya observadores.
+        .distinctUntilChanged() // evita recomposiciones si los datos no cambiaron
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     // esta funcion se encarga de añadir una nueva transaccion.

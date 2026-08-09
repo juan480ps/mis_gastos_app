@@ -14,6 +14,8 @@ import com.uaa.misgastosapp.data.repository.AuthRepository
 import com.uaa.misgastosapp.network.NetworkModule
 import com.uaa.misgastosapp.model.ErrorResponse
 import com.uaa.misgastosapp.utils.SecureSessionManager
+import com.uaa.misgastosapp.utils.GoogleSignInHelper
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SecureSessionManager(application)
     // se declara el repositorio de autenticacion, que sera la unica fuente de datos.
     private val authRepository: AuthRepository
+    // se crea el helper para Google Sign-In.
+    private val googleSignInHelper = GoogleSignInHelper(application)
 
     // el bloque 'init' se ejecuta cuando se crea una instancia de este viewmodel.
     init {
@@ -141,15 +145,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     !isValidEmail(email) ->
                         onError("Email inválido")
                     else -> {
-                        // si todas las validaciones pasan, se llama al metodo de registro del repositorio.
-                        authRepository.register(name, email, username, password)
-                        onSuccess()
+                        try {
+                            // si todas las validaciones pasan, se llama al metodo de registro del repositorio.
+                            authRepository.register(name, email, username, password)
+                            onSuccess()
+                        } catch (e: UnknownHostException) {
+                            // si no hay conexion, se muestra un mensaje claro.
+                            Log.e("AuthVM", "Sin conexión para registro.", e)
+                            onError("No se pudo conectar al servidor. Verifica tu conexión a internet.")
+                        } catch (e: SocketTimeoutException) {
+                            // si la conexion tarda mucho.
+                            Log.e("AuthVM", "Timeout en registro.", e)
+                            onError("La conexión tardó demasiado. Intenta de nuevo.")
+                        } catch (e: Exception) {
+                            // si ocurre otro error, se parsea y se muestra.
+                            Log.e("AuthVM", "Error en registro: ${e.message}", e)
+                            onError(parseApiErrorMessage(e.message ?: "Ocurrió un error inesperado"))
+                        }
                     }
                 }
-            } catch (e: Exception) {
-                // si ocurre un error, se parsea y se muestra.
-                Log.e("AuthVM", "Error en registro: ${e.message}", e)
-                onError(parseApiErrorMessage(e.message ?: "Ocurrió un error inesperado"))
             } finally {
                 _isLoading.value = false
             }
@@ -160,6 +174,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun logout() {
         viewModelScope.launch {
             try {
+                // se cierra sesion de Google tambien.
+                googleSignInHelper.signOut()
                 // se llama al metodo de logout del repositorio.
                 authRepository.logout()
                 _isLoggedIn.value = false
@@ -174,6 +190,41 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _isOnlineMode.value = true
                 sessionManager.logout()
                 NetworkModule.clearAuthentication()
+            }
+        }
+    }
+
+    // esta funcion maneja el inicio de sesion con Google.
+    fun signInWithGoogle(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                googleSignInHelper.signIn(
+                    onSuccess = { credential ->
+                        // se obtienen los datos del usuario de Google.
+                        val email = credential.id
+                        val name = credential.displayName ?: email.substringBefore("@")
+
+                        // se guarda la sesion localmente con los datos de Google.
+                        sessionManager.saveUserSession(
+                            userId = email.hashCode(), // usar hash del email como ID temporal
+                            email = email,
+                            name = name,
+                            username = email.substringBefore("@"),
+                            accessToken = "google_auth_${email.hashCode()}"
+                        )
+                        _isLoggedIn.value = true
+                        onSuccess()
+                    },
+                    onError = { errorMsg ->
+                        onError(errorMsg)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e("AuthVM", "Error en Google Sign-In: ${e.message}", e)
+                onError("Error al iniciar sesión con Google: ${e.message}")
+            } finally {
+                _isLoading.value = false
             }
         }
     }
@@ -195,7 +246,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     rawMessage.contains("409") -> "El email o usuario ya existe"
                     rawMessage.contains("500") -> "Error del servidor"
                     rawMessage.contains("404") -> "Servicio no disponible"
-                    else -> "Ocurrió un error inesperado"
+                    rawMessage.contains("API Register fallido") -> {
+                        // extraer el codigo de error del mensaje.
+                        val code = rawMessage.substringAfter("fallido: ").substringBefore(" - ").trim()
+                        when (code) {
+                            "409" -> "El email o usuario ya existe"
+                            "400" -> "Datos de registro inválidos"
+                            "500" -> "Error del servidor"
+                            else -> "Error del servidor (código: $code)"
+                        }
+                    }
+                    rawMessage.contains("API Login fallido") -> {
+                        val code = rawMessage.substringAfter("fallido: ").substringBefore(" - ").trim()
+                        when (code) {
+                            "401" -> "Credenciales inválidas"
+                            "404" -> "Servicio no disponible"
+                            "500" -> "Error del servidor"
+                            else -> "Error del servidor (código: $code)"
+                        }
+                    }
+                    else -> "Ocurrió un error inesperado: $rawMessage"
                 }
             }
         } catch (e: Exception) {

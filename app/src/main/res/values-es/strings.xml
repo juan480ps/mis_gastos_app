@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mis Gastos</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Saltar</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_start">¡Comenzar!</string>
+    <string name="onboarding_title_1">Controla tus Gastos</string>
+    <string name="onboarding_desc_1">Registra tus ingresos y gastos de forma fácil y rápida. Nunca pierdas el control de tu dinero.</string>
+    <string name="onboarding_title_2">Visualiza tu Dinero</string>
+    <string name="onboarding_desc_2">Gráficos intuitivos muestran dónde va tu dinero. Identifica patrones y toma mejores decisiones.</string>
+    <string name="onboarding_title_3">Establece Metas</string>
+    <string name="onboarding_desc_3">Crea presupuestos por categoría y alcanza tus objetivos de ahorro.</string>
+    <string name="onboarding_title_4">Gastos Recurrentes</string>
+    <string name="onboarding_desc_4">Automatiza tus gastos fijos como alquiler, servicios y suscripciones.</string>
+    <string name="onboarding_title_5">Sincroniza en la Nube</string>
+    <string name="onboarding_desc_5">Inicia sesión con Google para sincronizar tus datos en todos tus dispositivos.</string>
+    
+    <!-- Home -->
+    <string name="home_title">Mis Gastos</string>
+    <string name="home_greeting">Hola,</string>
+    <string name="home_guest">Invitado</string>
+    <string name="home_income">Ingresos</string>
+    <string name="home_expenses">Gastos</string>
+    <string name="home_balance">Saldo</string>
+    
+    <!-- Transactions -->
+    <string name="transaction_add">Agregar Transacción</string>
+    <string name="transaction_income">Ingreso</string>
+    <string name="transaction_expense">Gasto</string>
+    <string name="transaction_title">Título</string>
+    <string name="transaction_amount">Monto</string>
+    <string name="transaction_date">Fecha</string>
+    <string name="transaction_category">Categoría</string>
+    <string name="transaction_save">Guardar</string>
+    <string name="transaction_delete">Eliminar</string>
+    
+    <!-- Categories -->
+    <string name="categories_title">Categorías</string>
+    <string name="category_add">Agregar Categoría</string>
+    <string name="category_name">Nombre</string>
+    
+    <!-- Budgets -->
+    <string name="budgets_title">Presupuestos</string>
+    <string name="budget_add">Agregar Presupuesto</string>
+    <string name="budget_spent">Gastado</string>
+    <string name="budget_remaining">Restante</string>
+    
+    <!-- Recurring -->
+    <string name="recurring_title">Gastos Recurrentes</string>
+    <string name="recurring_add">Agregar Recurrente</string>
+    
+    <!-- Charts -->
+    <string name="charts_title">Gráficos</string>
+    
+    <!-- Login -->
+    <string name="login_title">Iniciar Sesión</string>
+    <string name="login_google">Continuar con Google</string>
+    <string name="login_guest">Usar sin sesión</string>
+    
+    <!-- Common -->
+    <string name="loading">Cargando...</string>
+    <string name="error">Error</string>
+    <string name="retry">Reintentar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="confirm">Confirmar</string>
+    <string name="delete_confirm">¿Estás seguro de eliminar?</string>
+</resources>

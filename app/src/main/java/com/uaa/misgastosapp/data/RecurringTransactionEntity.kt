@@ -4,6 +4,7 @@ package com.uaa.misgastosapp.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // aca se define un tipo de dato especial para los tipos de recurrencia. por ahora, solo contiene 'monthly' (mensual).
@@ -15,6 +16,7 @@ enum class RecurrenceType {
 @Entity(
     // aca se le da el nombre "recurring_transactions" a la tabla.
     tableName = "recurring_transactions",
+    indices = [Index(value = ["categoryId"])],
     // se definen las llaves foraneas, que son relaciones con otras tablas.
     foreignKeys = [
         ForeignKey(

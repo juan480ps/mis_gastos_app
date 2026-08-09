@@ -109,7 +109,7 @@ fun TransactionItem(
             ) {
                 // aca se define el contenido de los detalles (categoria y fecha).
                 Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Divider(modifier = Modifier.padding(bottom = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween

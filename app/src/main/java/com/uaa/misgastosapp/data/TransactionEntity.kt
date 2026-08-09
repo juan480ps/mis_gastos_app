@@ -4,12 +4,14 @@ package com.uaa.misgastosapp.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // con la anotacion @entity se le indica a room que esta clase representa una tabla en la base de datos.
 @Entity(
     // aca se le da el nombre "transactions" a la tabla.
     tableName = "transactions",
+    indices = [Index(value = ["categoryId"])],
     // se definen las llaves foraneas, que son relaciones con otras tablas.
     foreignKeys = [
         ForeignKey(
@@ -36,4 +38,15 @@ data class TransactionEntity(
     val date: String,
     // esta columna guarda el id de la categoria asociada. el signo de interrogacion indica que puede no tener una categoria (ser nulo).
     val categoryId: Int? = null
+)
+
+// data class para el resultado del JOIN entre transacciones y categorias.
+// permite obtener el nombre de la categoria en una sola query, evitando N+1 queries.
+data class TransactionWithCategoryName(
+    val id: Int,
+    val title: String,
+    val amount: Double,
+    val date: String,
+    val categoryId: Int?,
+    val categoryName: String?
 )

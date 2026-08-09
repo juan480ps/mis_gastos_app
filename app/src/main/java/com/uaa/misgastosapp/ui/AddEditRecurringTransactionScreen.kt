@@ -12,9 +12,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,7 +114,7 @@ fun AddEditRecurringTransactionScreen(
                 ),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 }
             )
@@ -155,7 +156,7 @@ fun AddEditRecurringTransactionScreen(
                     readOnly = true,
                     label = { Text("Categoría") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth()
                 )
                 ExposedDropdownMenu(
                     expanded = categoryDropdownExpanded,
@@ -286,7 +287,7 @@ fun DatePickerField(
                         datePickerDialog.dismiss()
                     }) {
                         // aca hay un pequeño error en el icono, deberia ser uno de 'limpiar'.
-                        Icon(Icons.Filled.ArrowBack, "Limpiar fecha")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Limpiar fecha")
                     }
                 }
                 // el icono principal para abrir el selector de fecha.
