@@ -23,7 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
+import androidx.compose.ui.platform.LocalContext
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.RecurringTransaction
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.RecurringTransactionViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -82,7 +85,10 @@ fun ManageRecurringTransactionsScreen(
                 }
             } else {
                 // si hay transacciones, se muestran en una lista.
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(recurringTransactions) { item ->
                         RecurringTransactionListItem(
                             item = item,
@@ -95,6 +101,14 @@ fun ManageRecurringTransactionsScreen(
                         )
                     }
                 }
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val context = LocalContext.current
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AdBanner()
             }
         }
     }

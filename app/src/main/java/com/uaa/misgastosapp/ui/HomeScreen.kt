@@ -26,13 +26,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Budget
 import com.uaa.misgastosapp.model.Transaction
@@ -210,14 +207,7 @@ fun HomeScreen(
         Column(modifier = Modifier.padding(padding)) {
             // Banner AdMob (solo para usuarios free)
             if (!isPremium) {
-                AndroidView(
-                    factory = { ctx ->
-                        AdView(ctx).apply {
-                            adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test ad unit
-                            setAdSize(AdSize.BANNER)
-                            loadAd(AdRequest.Builder().build())
-                        }
-                    },
+                AdBanner(
                     modifier = Modifier.fillMaxWidth()
                 )
             }

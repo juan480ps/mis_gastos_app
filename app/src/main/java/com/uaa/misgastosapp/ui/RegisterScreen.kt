@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -197,6 +199,13 @@ fun RegisterScreen(
                 } else {
                     Text("Registrarse")
                 }
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AdBanner()
             }
         }
     }

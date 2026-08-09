@@ -21,7 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Category
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.BudgetViewModel
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
 import com.uaa.misgastosapp.ui.viewmodel.TransactionViewModel
@@ -260,6 +262,13 @@ fun AddTransactionScreen(
                     }
                 }) {
                 Text("Guardar")
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AdBanner()
             }
         }
     }

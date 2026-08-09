@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
 
 // se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
@@ -97,6 +99,13 @@ fun AddCategoryScreen(navController: NavController, categoryViewModel: CategoryV
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Guardar Categoría")
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AdBanner()
             }
         }
     }

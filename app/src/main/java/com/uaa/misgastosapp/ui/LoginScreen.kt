@@ -21,6 +21,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.R
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
 import android.widget.Toast
 
@@ -140,6 +142,14 @@ fun LoginScreen(
                     Text("Usar sin sesión")
                 }
 
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Banner AdMob (solo usuarios free)
+                val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+                if (!isPremium) {
+                    AdBanner()
+                }
+                
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }

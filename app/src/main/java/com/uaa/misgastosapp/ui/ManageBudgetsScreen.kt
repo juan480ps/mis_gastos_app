@@ -33,6 +33,8 @@ import java.time.format.TextStyle
 import java.util.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.ui.components.AdBanner
 
 // se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
@@ -93,7 +95,10 @@ fun ManageBudgetsScreen(
                 }
             } else {
                 // si hay presupuestos, se muestran en una lista.
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(budgetsWithSpending) { budgetItem ->
                         BudgetListItem(
                             budget = budgetItem,
@@ -105,6 +110,13 @@ fun ManageBudgetsScreen(
                         )
                     }
                 }
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AdBanner()
             }
         }
         // se muestra el dialogo para establecer el presupuesto si 'showsetbudgetdialog' es verdadero.

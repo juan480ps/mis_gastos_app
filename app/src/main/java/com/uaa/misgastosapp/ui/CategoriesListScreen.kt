@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Category
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
 import com.uaa.misgastosapp.utils.Result
 
@@ -97,7 +99,10 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
                 }
             } else {
                 // si hay categorias, se muestran en una 'lazycolumn' para un desplazamiento eficiente.
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     // se crea un item en la lista por cada categoria.
                     items(categories) { category ->
                         CategoryListItem(
@@ -110,6 +115,13 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
                         )
                     }
                 }
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AdBanner()
             }
         }
     }

@@ -25,6 +25,9 @@ import com.github.mikephil.charting.data.PieData
 import com.github.mikephil.charting.data.PieDataSet
 import com.github.mikephil.charting.data.PieEntry
 import com.github.mikephil.charting.formatter.PercentFormatter
+import androidx.compose.ui.platform.LocalContext
+import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.ChartsViewModel
 import com.uaa.misgastosapp.ui.viewmodel.PieChartData
 import java.text.NumberFormat
@@ -130,6 +133,14 @@ fun ChartsScreen(
                         )
                     }
                 }
+            }
+            
+            // Banner AdMob (solo usuarios free)
+            val context = LocalContext.current
+            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+            if (!isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AdBanner()
             }
         }
     }
