@@ -4,6 +4,8 @@ import android.app.Application
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import com.google.android.gms.ads.MobileAds
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.worker.RecurringTransactionWorker
 
 /**
@@ -24,6 +26,14 @@ class GastosApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // Inicializar AdMob
+        MobileAds.initialize(this) { initializationStatus ->
+            Log.d(TAG, "AdMob inicializado: ${initializationStatus.adapterStatusMap.size} adaptadores")
+        }
+
+        // Inicializar PremiumManager (BillingClient)
+        PremiumManager.getInstance(this).startConnection()
 
         // Programar WorkManager para transacciones recurrentes
         try {

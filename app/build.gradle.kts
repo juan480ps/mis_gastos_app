@@ -92,6 +92,12 @@ dependencies {
     // Biometric
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
+    // Google Play Billing (In-App Purchases)
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+
+    // AdMob
+    implementation("com.google.android.gms:play-services-ads:24.4.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

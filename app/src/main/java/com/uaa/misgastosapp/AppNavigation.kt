@@ -28,6 +28,9 @@ object Routes {
     const val ADD_EDIT_RECURRING_TRANSACTION = "add_edit_recurring_transaction"
     const val ARG_RECURRING_TRANSACTION_ID = "recurringTransactionId"
     const val CHARTS_SCREEN = "charts_screen"
+    const val PREMIUM = "premium"
+    const val EXPORT = "export"
+    const val THEMES = "themes"
 }
 
 /**
@@ -102,5 +105,26 @@ fun AppNavigation(navController: NavHostController) {
 
         // Gráficos
         composable(Routes.CHARTS_SCREEN) { ChartsScreen(navController) }
+
+        // Premium
+        composable(Routes.PREMIUM) {
+            PremiumScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Exportar datos (Premium)
+        composable(Routes.EXPORT) {
+            ExportScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Temas exclusivos
+        composable(Routes.THEMES) {
+            ThemesScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
     }
 }

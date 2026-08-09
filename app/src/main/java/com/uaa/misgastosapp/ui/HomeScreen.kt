@@ -26,9 +26,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Budget
 import com.uaa.misgastosapp.model.Transaction
 import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
@@ -131,6 +136,27 @@ fun HomeScreen(
                             modifier = Modifier.padding(end = 8.dp)
                         )
                     }
+                    // Botón Exportar (solo Premium)
+                    val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+                    if (isPremium) {
+                        IconButton(onClick = { navController.navigate(Routes.EXPORT) }) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = "Exportar",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                    // Botón Premium
+                    if (!isPremium) {
+                        IconButton(onClick = { navController.navigate(Routes.PREMIUM) }) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = "Premium",
+                                tint = Color(0xFFFFD700)
+                            )
+                        }
+                    }
                     IconButton(onClick = { showLogoutDialog = true }) {
                         if (isLoggedIn) {
                             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Cerrar Sesión")
@@ -178,10 +204,29 @@ fun HomeScreen(
             }
         }
     ) { padding ->
+        // Banner de AdMob para usuarios free
+        val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
+        
+        Column(modifier = Modifier.padding(padding)) {
+            // Banner AdMob (solo para usuarios free)
+            if (!isPremium) {
+                AndroidView(
+                    factory = { ctx ->
+                        AdView(ctx).apply {
+                            adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test ad unit
+                            setAdSize(AdSize.BANNER)
+                            loadAd(AdRequest.Builder().build())
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
         // se usa una 'lazycolumn' para mostrar el contenido principal de forma eficiente.
         LazyColumn(
             modifier = Modifier
-                .padding(padding)
+                .fillMaxWidth()
+                .weight(1f)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // se muestra una tarjeta con el resumen del saldo.
@@ -311,7 +356,8 @@ fun HomeScreen(
                 }
             }
         }
-    }
+    } // Fin LazyColumn
+    } // Fin Column
 
     // se muestra el dialogo segun el estado de sesion.
     if (showLogoutDialog) {
