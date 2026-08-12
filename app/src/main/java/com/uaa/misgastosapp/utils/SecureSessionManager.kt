@@ -5,6 +5,7 @@ package com.uaa.misgastosapp.utils
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.uaa.misgastosapp.BuildConfig
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +46,7 @@ class SecureSessionManager(context: Context) {
 
     // esta funcion guarda todos los datos de la sesion del usuario.
     fun saveUserSession(userId: Int, email: String, name: String, username: String, accessToken: String) {
-        Log.d("SessionManager", "Saving session - userId: $userId, token: ${accessToken.take(20)}...")
+        if (BuildConfig.DEBUG) Log.d("SessionManager", "Saving session - userId: $userId")
         prefs.edit().apply {
             putInt(USER_ID, userId)
             putString(USER_EMAIL, email)
@@ -60,7 +61,6 @@ class SecureSessionManager(context: Context) {
 
     // esta funcion guarda solo el token de acceso.
     fun saveToken(token: String) {
-        Log.d("SessionManager", "Saving token: ${token.take(20)}...")
         prefs.edit()
             .putString(ACCESS_TOKEN, token)
             .commit()
@@ -77,9 +77,7 @@ class SecureSessionManager(context: Context) {
 
     // esta funcion obtiene el token de acceso guardado.
     fun getAccessToken(): String? {
-        val token = prefs.getString(ACCESS_TOKEN, null)
-        Log.d("SessionManager", "Getting token: ${token?.take(20) ?: "null"}")
-        return token
+        return prefs.getString(ACCESS_TOKEN, null)
     }
 
     // esta funcion comprueba si el usuario ha iniciado sesion.
@@ -88,7 +86,6 @@ class SecureSessionManager(context: Context) {
         val token = getAccessToken()
         // se considera que la sesion esta iniciada solo si la bandera 'is_logged_in' es verdadera y existe un token valido.
         val hasValidToken = token != null && token.isNotEmpty()
-        Log.d("SessionManager", "isLoggedIn: $loggedIn, hasValidToken: $hasValidToken")
         return loggedIn && hasValidToken
     }
 

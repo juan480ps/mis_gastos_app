@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.uaa.misgastosapp.model.Transaction
@@ -27,6 +29,7 @@ import java.util.*
 @Composable
 fun TransactionItem(
     transaction: Transaction,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     // se configuran el formato de moneda y se formatea el monto.
@@ -42,8 +45,14 @@ fun TransactionItem(
     val incomeColorText = Color(0xFF1B5E20)
     val expenseColorText = Color(0xFFB71C1C)
     val amountColor = if (isIncome) incomeColorText else expenseColorText
-    val incomeBgColor = Color(0xFFE8F5E9)
-    val expenseBgColor = Color(0xFFFFEBEE)
+    // el fondo de la tarjeta es un tinte claro del color del tema activo (no verde/rosa fijos
+    // que no combinaban con el tema elegido por el usuario en Temas).
+    val cardBgColor = lerp(MaterialTheme.colorScheme.primary, Color.White, 0.85f)
+    // este fondo siempre es claro (es un tinte hacia blanco), asi que el texto de encima debe
+    // ser siempre oscuro; usar MaterialTheme.colorScheme.onSurface se vuelve casi blanco en modo
+    // oscuro e ilegible sobre este fondo claro.
+    val onCardColor = Color(0xFF1B1B1B)
+    val onCardVariantColor = Color(0xFF5F6368)
     // se crea una animacion para la rotacion de la flecha de expandir/colapsar.
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -51,15 +60,19 @@ fun TransactionItem(
         label = "arrowRotation"
     )
 
-    // se usa una card como contenedor principal del item.
+    // se usa una card como contenedor principal del item. tocar en cualquier parte de la card
+    // expande/colapsa el detalle (igual que tocar la fecha del encabezado del mes); los botones
+    // de editar/borrar tienen su propio click y lo interceptan antes de que llegue a la card.
     Card(
+        onClick = { expanded = !expanded },
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         elevation = CardDefaults.cardElevation(2.dp),
-        // el color de fondo de la tarjeta depende si es ingreso o gasto.
+        // el fondo ya no depende de si es ingreso/gasto (eso lo indica el color del monto);
+        // usa el tinte claro del color del tema para que combine con lo que el usuario elija.
         colors = CardDefaults.cardColors(
-            containerColor = if (isIncome) incomeBgColor else expenseBgColor
+            containerColor = cardBgColor
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -74,7 +87,7 @@ fun TransactionItem(
                         text = transaction.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = onCardColor
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -85,19 +98,22 @@ fun TransactionItem(
                     )
                 }
 
-                // se muestran los botones de accion (borrar y expandir).
+                // se muestran los botones de accion (editar, borrar y expandir).
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = onCardVariantColor)
+                    }
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = onCardVariantColor)
                     }
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Expandir",
-                            modifier = Modifier.rotate(arrowRotation),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    // decorativo: la card entera ya expande/colapsa al tocarla, este icono solo
+                    // muestra el estado (rotando) sin tener su propio area de click separada.
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = if (expanded) "Colapsar" else "Expandir",
+                        modifier = Modifier.rotate(arrowRotation).padding(12.dp),
+                        tint = onCardVariantColor
+                    )
                 }
             }
 
@@ -118,12 +134,12 @@ fun TransactionItem(
                             text = "Categoría:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = onCardVariantColor
                         )
                         Text(
                             text = transaction.categoryName ?: "Sin Categoría",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = onCardVariantColor
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -135,13 +151,33 @@ fun TransactionItem(
                             text = "Fecha:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = onCardVariantColor
                         )
                         Text(
                             text = transaction.date,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = onCardVariantColor
                         )
+                    }
+                    // la cuenta es opcional: esta fila solo aparece si la transaccion tiene una asignada.
+                    transaction.accountName?.let { accountName ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Cuenta:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = onCardVariantColor
+                            )
+                            Text(
+                                text = accountName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = onCardVariantColor
+                            )
+                        }
                     }
 
                 }

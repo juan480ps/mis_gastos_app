@@ -36,5 +36,9 @@ data class BudgetEntity(
     // esta columna guarda el mes y el año del presupuesto en formato de texto.
     val monthYear: String,
     // esta columna guarda el monto total del presupuesto.
-    val amount: Double
+    val amount: Double,
+    // true = aplica a todos los meses (no hace falta volver a configurarlo cada mes); false =
+    // solo aplica al mes especifico guardado en 'monthYear'. cuando es true, 'monthYear' se
+    // guarda con el sentinel RECURRING_MONTH_YEAR (ver BudgetRepository) en vez de un mes real.
+    val isRecurring: Boolean = false
 )

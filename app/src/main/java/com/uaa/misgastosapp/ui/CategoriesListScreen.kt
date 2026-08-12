@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,13 +20,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Category
 import com.uaa.misgastosapp.ui.components.AdBanner
+import com.uaa.misgastosapp.ui.components.AppBottomNavBar
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
 import com.uaa.misgastosapp.utils.Result
 
@@ -35,6 +40,7 @@ import com.uaa.misgastosapp.utils.Result
 fun CategoriesListScreen(navController: NavController, categoryViewModel: CategoryViewModel = viewModel()) {
     // se obtiene la lista de categorias desde el viewmodel. el estado se actualiza automaticamente.
     val categories by categoryViewModel.categories.collectAsState()
+    val isLoading by categoryViewModel.isLoading.collectAsState()
 
     // se observa el estado de las operaciones (como borrar) para mostrar mensajes al usuario.
     val operationStatus by categoryViewModel.operationStatus.collectAsState()
@@ -42,6 +48,9 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
     // se usan estados para manejar el dialogo de confirmacion de borrado.
     var categoryToDelete by remember { mutableStateOf<Category?>(null) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    // se usan estados para manejar el dialogo de renombrar.
+    var categoryToEdit by remember { mutableStateOf<Category?>(null) }
+    var editedName by rememberSaveable { mutableStateOf("") }
 
     // este efecto se ejecuta cada vez que 'operationstatus' cambia.
     // se usa para mostrar los mensajes de exito o error de las operaciones.
@@ -80,10 +89,24 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
                 }
             )
         },
+        // barra inferior compartida con Inicio/Presupuestos/Recurrentes/Gráficos, para que no
+        // desaparezca al entrar a esta sección.
+        bottomBar = { AppBottomNavBar(navController, Routes.CATEGORIES_LIST) },
         // se define un boton de accion flotante para añadir nuevas categorias.
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                navController.navigate(Routes.ADD_CATEGORY) },
+                // se avisa el limite del plan Free antes de abrir el formulario, no despues de
+                // llenarlo (antes el aviso solo aparecia recien al tocar "Guardar").
+                if (!PremiumLimits.canAddCategory(context, categories.size)) {
+                    Toast.makeText(
+                        context,
+                        "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_CATEGORIES} categorías del plan Free. Pasate a Premium para categorías ilimitadas.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    navController.navigate(Routes.ADD_CATEGORY)
+                }
+            },
                 containerColor = MaterialTheme.colorScheme.primary,
                 shape = CircleShape
             ) {
@@ -92,8 +115,12 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(8.dp)) {
-            // si la lista de categorias esta vacia, se muestra un mensaje.
-            if (categories.isEmpty()) {
+            // se distingue "cargando" (isLoading) de "realmente no hay categorias" (ya cargo y esta vacia).
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (categories.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No hay categorías. ¡Añade una!")
                 }
@@ -107,6 +134,10 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
                     items(categories) { category ->
                         CategoryListItem(
                             category = category,
+                            onEdit = {
+                                categoryToEdit = category
+                                editedName = category.name
+                            },
                             onDelete = {
                                 // al hacer clic en borrar, se guarda la categoria a eliminar y se muestra el dialogo.
                                 categoryToDelete = category
@@ -117,7 +148,9 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
                 }
             }
             
-            // Banner AdMob (solo usuarios free)
+            // Banner AdMob (solo usuarios free). Con la barra inferior de navegacion presente,
+            // el FAB flota por encima de ella en vez de sobre el contenido, asi que ya no
+            // necesita espacio extra reservado.
             val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
             if (!isPremium) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -161,11 +194,43 @@ fun CategoriesListScreen(navController: NavController, categoryViewModel: Catego
             }
         )
     }
+
+    // se muestra el dialogo para renombrar si hay una categoria seleccionada para editar.
+    if (categoryToEdit != null) {
+        AlertDialog(
+            onDismissRequest = { categoryToEdit = null },
+            title = { Text("Renombrar Categoría") },
+            text = {
+                OutlinedTextField(
+                    value = editedName,
+                    onValueChange = { editedName = it },
+                    label = { Text("Nombre de la Categoría") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        categoryToEdit?.let { categoryViewModel.updateCategory(it, editedName) }
+                        categoryToEdit = null
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryToEdit = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 // este es un composable reutilizable para cada elemento de la lista de categorias.
 @Composable
-fun CategoryListItem(category: Category, onDelete: () -> Unit) {
+fun CategoryListItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
     // se usa una 'card' para darle un fondo y elevacion al elemento.
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -174,15 +239,20 @@ fun CategoryListItem(category: Category, onDelete: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // se muestra el nombre de la categoria.
             Text(text = category.name, style = MaterialTheme.typography.bodyLarge)
-            // se muestra el boton de borrar.
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Eliminar Categoría")
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Renombrar Categoría")
+                }
+                // se muestra el boton de borrar.
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Eliminar Categoría")
+                }
             }
         }
     }

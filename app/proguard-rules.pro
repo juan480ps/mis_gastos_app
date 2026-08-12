@@ -29,3 +29,20 @@
 # Play Services
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.android.gms.**
+
+# Retrofit: usa interfaces con generics y anotaciones via reflexion en tiempo de ejecucion.
+-keepattributes Signature, InnerClasses, EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+-keep interface com.uaa.misgastosapp.network.GastosApiService { *; }
+-dontwarn retrofit2.**
+
+# Gson: deserializa los modelos de red/perfil via reflexion, necesita conservar sus campos.
+-keepclassmembers class com.uaa.misgastosapp.model.** { *; }
+-keep class com.google.gson.** { *; }
+-dontwarn com.google.gson.**
+
+# SQLCipher: JNI nativo, evita que R8 renombre/elimine algo que rompa la carga de la libreria.
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.**

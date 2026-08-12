@@ -4,8 +4,9 @@ import android.app.Application
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
-import com.google.android.gms.ads.MobileAds
+import com.uaa.misgastosapp.data.AdsManager
 import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.worker.RecurringNotificationHelper
 import com.uaa.misgastosapp.worker.RecurringTransactionWorker
 
 /**
@@ -27,10 +28,14 @@ class GastosApp : Application() {
         super.onCreate()
         instance = this
 
-        // Inicializar AdMob
-        MobileAds.initialize(this) { initializationStatus ->
-            Log.d(TAG, "AdMob inicializado: ${initializationStatus.adapterStatusMap.size} adaptadores")
-        }
+        // Debe cargarse antes de cualquier acceso a la base de datos (AppDatabase usa SQLCipher).
+        System.loadLibrary("sqlcipher")
+
+        // Inicializar AdMob (AdBanner espera a AdsManager.isReady antes de pedir un anuncio).
+        AdsManager.initialize(this)
+
+        // El canal debe existir antes de poder postear cualquier notificacion de recurrentes.
+        RecurringNotificationHelper.createNotificationChannel(this)
 
         // Inicializar PremiumManager (BillingClient)
         PremiumManager.getInstance(this).startConnection()

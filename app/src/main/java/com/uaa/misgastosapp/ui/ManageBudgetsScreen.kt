@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,8 +34,13 @@ import java.time.format.TextStyle
 import java.util.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.Routes
 import com.uaa.misgastosapp.ui.components.AdBanner
+import com.uaa.misgastosapp.ui.components.AppBottomNavBar
+import com.uaa.misgastosapp.ui.components.ThousandsSeparatorVisualTransformation
+import com.uaa.misgastosapp.utils.Result
 
 // se asegura que el codigo use apis disponibles a partir de android oreo.
 @RequiresApi(Build.VERSION_CODES.O)
@@ -48,12 +54,37 @@ fun ManageBudgetsScreen(
 ) {
     // se obtienen los estados desde el viewmodel.
     val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState(initial = emptyList())
+    val recurringBudgetsCount by budgetViewModel.recurringBudgetsCount.collectAsState()
+    val isLoadingBudgets by budgetViewModel.isLoading.collectAsState()
     val currentYearMonth by budgetViewModel.currentMonthYear.collectAsState()
     // se definen estados para manejar el dialogo de edicion de presupuesto.
     var showSetBudgetDialog by remember { mutableStateOf(false) }
     var selectedCategoryForBudget by remember { mutableStateOf<Budget?>(null) }
+    // se usan estados para manejar el dialogo de confirmacion de borrado, igual que en
+    // Categorías/Cuentas/Recurrentes (antes, quitar un presupuesto solo se podia hacer
+    // escondido dentro del dialogo de editar).
+    var budgetToDelete by remember { mutableStateOf<Budget?>(null) }
     val context = LocalContext.current
+    val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
     val monthDisplayFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
+    val operationStatus by budgetViewModel.operationStatus.collectAsState()
+
+    // se observa el resultado de setBudget: exito cierra el dialogo y avisa, error solo avisa.
+    LaunchedEffect(operationStatus) {
+        when (val status = operationStatus) {
+            is Result.Success -> {
+                Toast.makeText(context, status.data, Toast.LENGTH_SHORT).show()
+                budgetViewModel.clearOperationStatus()
+                showSetBudgetDialog = false
+            }
+            is Result.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_LONG).show()
+                budgetViewModel.clearOperationStatus()
+            }
+            is Result.Loading -> {}
+            null -> {}
+        }
+    }
 
     // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
@@ -75,12 +106,27 @@ fun ManageBudgetsScreen(
                 actions = {
                     MonthNavigator(
                         currentYearMonth = currentYearMonth,
-                        onPreviousMonth = { budgetViewModel.setCurrentMonthYear(currentYearMonth.minusMonths(1)) },
+                        onPreviousMonth = {
+                            // el plan Free solo puede ver los ultimos FREE_HISTORY_MONTHS meses.
+                            val earliestAllowed = YearMonth.now().minusMonths((PremiumLimits.FREE_HISTORY_MONTHS - 1).toLong())
+                            if (isPremium || currentYearMonth.isAfter(earliestAllowed)) {
+                                budgetViewModel.setCurrentMonthYear(currentYearMonth.minusMonths(1))
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "El historial de más de ${PremiumLimits.FREE_HISTORY_MONTHS} meses es una función Premium.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
                         onNextMonth = { budgetViewModel.setCurrentMonthYear(currentYearMonth.plusMonths(1)) }
                     )
                 }
             )
-        }
+        },
+        // barra inferior compartida con Inicio/Categorías/Recurrentes/Gráficos, para que no
+        // desaparezca al entrar a esta sección.
+        bottomBar = { AppBottomNavBar(navController, Routes.MANAGE_BUDGETS) }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(8.dp)) {
             Text(
@@ -88,8 +134,12 @@ fun ManageBudgetsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
             )
-            // si no hay presupuestos, se muestra un mensaje.
-            if (budgetsWithSpending.isEmpty()) {
+            // se distingue "cargando" de "realmente no hay categorias para presupuestar".
+            if (isLoadingBudgets) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (budgetsWithSpending.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No hay categorías para presupuestar o no hay categorías creadas.")
                 }
@@ -103,10 +153,23 @@ fun ManageBudgetsScreen(
                         BudgetListItem(
                             budget = budgetItem,
                             onEditClick = {
-                                // al hacer clic en editar, se guarda la categoria y se abre el dialogo.
-                                selectedCategoryForBudget = budgetItem
-                                showSetBudgetDialog = true
-                            }
+                                // se avisa el limite del plan Free antes de abrir el dialogo (solo
+                                // aplica si esta categoria todavia no tiene presupuesto, ya que
+                                // editar uno existente no suma al limite).
+                                val activeBudgetsThisMonth = budgetsWithSpending.count { it.amount > 0 }
+                                if (budgetItem.amount <= 0 && !PremiumLimits.canAddBudget(context, activeBudgetsThisMonth)) {
+                                    Toast.makeText(
+                                        context,
+                                        "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_BUDGETS} presupuestos del plan Free. Pasate a Premium para presupuestos ilimitados.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    // al hacer clic en editar, se guarda la categoria y se abre el dialogo.
+                                    selectedCategoryForBudget = budgetItem
+                                    showSetBudgetDialog = true
+                                }
+                            },
+                            onDeleteClick = { budgetToDelete = budgetItem }
                         )
                     }
                 }
@@ -125,19 +188,76 @@ fun ManageBudgetsScreen(
                 budgetInfo = selectedCategoryForBudget!!,
                 currentMonthYear = currentYearMonth,
                 onDismiss = { showSetBudgetDialog = false },
-                onSetBudget = { categoryId, amount, monthYearStr ->
-                    budgetViewModel.setBudget(
-                        categoryId,
-                        amount,
-                        monthYearStr,
-                        onSuccess = {
-                            Toast.makeText(context, "Presupuesto guardado", Toast.LENGTH_SHORT).show()
-                            showSetBudgetDialog = false
-                        },
-                        onError = { errorMsg ->
-                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                recurringBudgetsCount = recurringBudgetsCount,
+                onSetBudget = { categoryId, amount, monthYearStr, isRecurring ->
+                    // ya tenia un presupuesto de ESE mismo tipo antes de abrir el dialogo? si es
+                    // asi, guardarlo es una edicion y no suma al limite correspondiente.
+                    val wasAlreadySameType = selectedCategoryForBudget?.let {
+                        it.amount > 0 && it.isRecurring == isRecurring
+                    } == true
+
+                    if (isRecurring) {
+                        // limite de presupuestos "todos los meses", independiente del de por mes.
+                        if (!wasAlreadySameType && !PremiumLimits.canAddRecurringBudget(context, recurringBudgetsCount)) {
+                            Toast.makeText(
+                                context,
+                                "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_RECURRING_BUDGETS} presupuestos \"todos los meses\" del plan Free. Pasate a Premium para presupuestos recurrentes ilimitados.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@SetBudgetDialog
                         }
+                    } else {
+                        // el limite de presupuestos por mes del plan Free cuenta cuantos ya
+                        // tienen un monto establecido este mes; editar uno existente no suma.
+                        val activeBudgetsThisMonth = budgetsWithSpending.count { it.amount > 0 && !it.isRecurring }
+                        if (!wasAlreadySameType && !PremiumLimits.canAddBudget(context, activeBudgetsThisMonth)) {
+                            Toast.makeText(
+                                context,
+                                "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_BUDGETS} presupuestos del plan Free. Pasate a Premium para presupuestos ilimitados.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@SetBudgetDialog
+                        }
+                    }
+                    // si el usuario cambio de tipo (ej. de "este mes" a "todos los meses"), se
+                    // quita la version vieja para no dejar dos presupuestos activos a la vez.
+                    if (selectedCategoryForBudget?.amount ?: 0.0 > 0.0 &&
+                        selectedCategoryForBudget?.isRecurring != isRecurring
+                    ) {
+                        budgetViewModel.deleteBudget(categoryId, monthYearStr, selectedCategoryForBudget?.isRecurring ?: false)
+                    }
+                    // el resultado se maneja en el LaunchedEffect que observa operationStatus.
+                    budgetViewModel.setBudget(categoryId, amount, monthYearStr, isRecurring)
+                },
+                onDeleteBudget = { categoryId, monthYearStrToDelete, isRecurring ->
+                    // el resultado se maneja en el LaunchedEffect que observa operationStatus.
+                    budgetViewModel.deleteBudget(categoryId, monthYearStrToDelete, isRecurring)
+                }
+            )
+        }
+
+        // se muestra el dialogo de confirmacion si hay un presupuesto seleccionado para borrar.
+        if (budgetToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { budgetToDelete = null },
+                title = { Text("Quitar Presupuesto") },
+                text = {
+                    Text(
+                        "¿Quitar el presupuesto de '${budgetToDelete?.categoryName}'? Las transacciones ya registradas no se borran."
                     )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        budgetToDelete?.let { budgetViewModel.deleteBudget(it.categoryId, it.monthYear, it.isRecurring) }
+                        budgetToDelete = null
+                    }) {
+                        Text("Quitar", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { budgetToDelete = null }) {
+                        Text("Cancelar")
+                    }
                 }
             )
         }
@@ -171,7 +291,7 @@ fun MonthNavigator(
 @RequiresApi(Build.VERSION_CODES.O)
 // este es un composable reutilizable para cada elemento de la lista de presupuestos.
 @Composable
-fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
+fun BudgetListItem(budget: Budget, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("es", "PY")).apply {
         maximumFractionDigits = 0
     }
@@ -190,7 +310,23 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(budget.categoryName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(budget.categoryName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (budget.amount > 0 && budget.isRecurring) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                "Todos los meses",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Presupuesto: ${currencyFormat.format(budget.amount)}",
@@ -225,6 +361,12 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
             IconButton(onClick = onEditClick) {
                 Icon(Icons.Filled.Edit, contentDescription = "Editar Presupuesto")
             }
+            // quitar solo tiene sentido si ya hay un presupuesto establecido para esta categoria.
+            if (budget.amount > 0) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Quitar Presupuesto")
+                }
+            }
         }
     }
 }
@@ -238,29 +380,27 @@ fun BudgetListItem(budget: Budget, onEditClick: () -> Unit) {
 fun SetBudgetDialog(
     budgetInfo: Budget,
     currentMonthYear: YearMonth,
+    recurringBudgetsCount: Int,
     onDismiss: () -> Unit,
-    onSetBudget: (categoryId: Int, amount: Double, monthYearStr: String) -> Unit
+    onSetBudget: (categoryId: Int, amount: Double, monthYearStr: String, isRecurring: Boolean) -> Unit,
+    onDeleteBudget: (categoryId: Int, monthYearStr: String, isRecurring: Boolean) -> Unit
 ) {
-    // estado para el valor numerico real (sin formato).
+    // estado para el valor numerico real (solo digitos); el separador de miles se agrega solo
+    // para mostrarlo via ThousandsSeparatorVisualTransformation, nunca se reformatea el texto
+    // real (eso hacia saltar el cursor al final cada vez que se escribia un digito).
     var rawAmount by remember {
         mutableStateOf(
             if (budgetInfo.amount > 0) budgetInfo.amount.toLong().toString() else ""
         )
     }
-
-    // estado para el valor formateado que se muestra.
-    var formattedAmount by remember {
-        mutableStateOf(
-            if (budgetInfo.amount > 0) {
-                NumberFormat.getNumberInstance(Locale.US).format(budgetInfo.amount.toLong())
-            } else ""
-        )
-    }
+    // "este mes" o "todos los meses"; arranca con el valor actual del presupuesto (o "este mes"
+    // si todavia no hay ninguno establecido para esta categoria).
+    var isRecurring by remember { mutableStateOf(budgetInfo.isRecurring) }
 
     val context = LocalContext.current
+    val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
     val monthYearStr = currentMonthYear.format(DateTimeFormatter.ofPattern("yyyy-MM"))
     val monthDisplayFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
-    val numberFormatter = NumberFormat.getNumberInstance(Locale.US)
 
     // se muestra un dialogo.
     Dialog(onDismissRequest = onDismiss) {
@@ -286,30 +426,58 @@ fun SetBudgetDialog(
 
                 // campo de texto para ingresar el monto del presupuesto.
                 OutlinedTextField(
-                    value = formattedAmount,
-                    // logica para formatear el numero mientras se escribe.
-                    onValueChange = { input ->
-                        // remover todo lo que no sea digito.
-                        val digitsOnly = input.replace(",", "").filter { it.isDigit() }
-
-                        if (digitsOnly.isEmpty()) {
-                            rawAmount = ""
-                            formattedAmount = ""
-                        } else {
-                            // limitar a un maximo razonable (999,999,999,999).
-                            val numericValue = digitsOnly.take(12).toLongOrNull() ?: 0L
-                            rawAmount = numericValue.toString()
-
-                            // formatear con separadores de miles.
-                            formattedAmount = numberFormatter.format(numericValue)
-                        }
-                    },
+                    value = rawAmount,
+                    // se limita a un maximo razonable (999,999,999,999) y solo digitos.
+                    onValueChange = { input -> rawAmount = input.filter { it.isDigit() }.take(12) },
                     label = { Text("Monto del Presupuesto (PYG)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     prefix = { Text("₲ ") },
-                    placeholder = { Text("0") }
+                    placeholder = { Text("0") },
+                    visualTransformation = ThousandsSeparatorVisualTransformation()
                 )
+
+                // permite elegir si el presupuesto aplica solo a este mes o a todos los meses
+                // (no hace falta volver a configurarlo cada mes). los recurrentes tienen su
+                // propio limite en el plan Free, separado del de presupuestos por mes.
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !isRecurring,
+                            onClick = { isRecurring = false },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) {
+                            Text("Este mes")
+                        }
+                        SegmentedButton(
+                            selected = isRecurring,
+                            onClick = { isRecurring = true },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) {
+                            Text("Todos los meses")
+                        }
+                    }
+                    if (isRecurring && !isPremium) {
+                        Text(
+                            "Plan Free: $recurringBudgetsCount / ${PremiumLimits.FREE_MAX_RECURRING_BUDGETS} presupuestos \"todos los meses\"",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+
+                // quitar el presupuesto solo tiene sentido si ya hay uno establecido; no borra
+                // las transacciones, solo el limite. se usa el tipo ORIGINAL (budgetInfo.isRecurring),
+                // no el del toggle, ya que "quitar" debe apuntar a lo que realmente existe en la bd.
+                if (budgetInfo.amount > 0) {
+                    TextButton(
+                        onClick = { onDeleteBudget(budgetInfo.categoryId, monthYearStr, budgetInfo.isRecurring) },
+                        modifier = Modifier.align(Alignment.Start)
+                    ) {
+                        Text("Quitar presupuesto", color = MaterialTheme.colorScheme.error)
+                    }
+                }
 
                 // botones de accion del dialogo.
                 Row(
@@ -335,7 +503,7 @@ fun SetBudgetDialog(
                             }
                             else -> {
                                 // si todo es correcto, se llama a la funcion para guardar.
-                                onSetBudget(budgetInfo.categoryId, amount, monthYearStr)
+                                onSetBudget(budgetInfo.categoryId, amount, monthYearStr, isRecurring)
                             }
                         }
                     }) {

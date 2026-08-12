@@ -5,11 +5,14 @@ package com.uaa.misgastosapp.ui
 // se importa el color de android con un alias para evitar conflictos con el color de compose.
 import android.graphics.Color as AndroidColor
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,8 +29,12 @@ import com.github.mikephil.charting.data.PieDataSet
 import com.github.mikephil.charting.data.PieEntry
 import com.github.mikephil.charting.formatter.PercentFormatter
 import androidx.compose.ui.platform.LocalContext
+import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.ui.components.AdBanner
+import com.uaa.misgastosapp.ui.components.AppBottomNavBar
+import com.uaa.misgastosapp.ui.viewmodel.AccountViewModel
 import com.uaa.misgastosapp.ui.viewmodel.ChartsViewModel
 import com.uaa.misgastosapp.ui.viewmodel.PieChartData
 import java.text.NumberFormat
@@ -45,11 +52,18 @@ import androidx.compose.material3.MaterialTheme
 @Composable
 fun ChartsScreen(
     navController: NavController,
-    chartsViewModel: ChartsViewModel = viewModel()
+    chartsViewModel: ChartsViewModel = viewModel(),
+    accountViewModel: AccountViewModel = viewModel()
 ) {
     // se obtienen los estados desde el viewmodel.
     val currentYearMonth by chartsViewModel.currentMonthYear.collectAsState()
     val processedPieData by chartsViewModel.processedExpensePieData.collectAsState(initial = emptyList())
+    val accountFilterId by chartsViewModel.accountFilterId.collectAsState()
+    val accounts by accountViewModel.accounts.collectAsState()
+    val accountFilter = accounts.find { it.id == accountFilterId }
+    var accountFilterExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
     // se configuran los formatos de mes y moneda.
     val monthDisplayFormatter = remember { DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES")) }
     val currencyFormat = remember {
@@ -76,12 +90,27 @@ fun ChartsScreen(
                 actions = {
                     MonthNavigator(
                         currentYearMonth = currentYearMonth,
-                        onPreviousMonth = { chartsViewModel.setCurrentMonthYear(currentYearMonth.minusMonths(1)) },
+                        onPreviousMonth = {
+                            // el plan Free solo puede ver los ultimos FREE_HISTORY_MONTHS meses.
+                            val earliestAllowed = YearMonth.now().minusMonths((PremiumLimits.FREE_HISTORY_MONTHS - 1).toLong())
+                            if (isPremium || currentYearMonth.isAfter(earliestAllowed)) {
+                                chartsViewModel.setCurrentMonthYear(currentYearMonth.minusMonths(1))
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "El historial de más de ${PremiumLimits.FREE_HISTORY_MONTHS} meses es una función Premium.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
                         onNextMonth = { chartsViewModel.setCurrentMonthYear(currentYearMonth.plusMonths(1)) }
                     )
                 }
             )
-        }
+        },
+        // barra inferior compartida con Inicio/Categorías/Presupuestos/Recurrentes, para que no
+        // desaparezca al entrar a esta sección.
+        bottomBar = { AppBottomNavBar(navController, Routes.CHARTS_SCREEN) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -94,8 +123,53 @@ fun ChartsScreen(
             Text(
                 text = "Gastos por Categoría: ${currentYearMonth.format(monthDisplayFormatter).replaceFirstChar { it.uppercase() }}",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            // selector de cuenta: filtrar los graficos por cuenta es una funcion Premium. en el
+            // plan Free se muestra igual (para que sepan que existe) pero al tocarlo se avisa el
+            // limite en vez de abrir el menu, y los datos siempre son de todas las cuentas.
+            if (accounts.isNotEmpty()) {
+                Box(modifier = Modifier.padding(bottom = 8.dp)) {
+                    TextButton(onClick = {
+                        if (isPremium) {
+                            accountFilterExpanded = true
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Filtrar los gráficos por cuenta es una función Premium.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }) {
+                        Icon(Icons.Filled.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isPremium) (accountFilter?.name ?: "Todas las cuentas") else "Todas las cuentas")
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                    }
+                    DropdownMenu(
+                        expanded = accountFilterExpanded,
+                        onDismissRequest = { accountFilterExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Todas las cuentas") },
+                            onClick = {
+                                chartsViewModel.setAccountFilter(null)
+                                accountFilterExpanded = false
+                            }
+                        )
+                        accounts.forEach { account ->
+                            DropdownMenuItem(
+                                text = { Text(account.name) },
+                                onClick = {
+                                    chartsViewModel.setAccountFilter(account.id)
+                                    accountFilterExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             // si no hay datos, se muestra un mensaje.
             if (processedPieData.isEmpty()) {
@@ -136,8 +210,6 @@ fun ChartsScreen(
             }
             
             // Banner AdMob (solo usuarios free)
-            val context = LocalContext.current
-            val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
             if (!isPremium) {
                 Spacer(modifier = Modifier.height(8.dp))
                 AdBanner()

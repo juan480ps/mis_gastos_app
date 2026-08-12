@@ -1,12 +1,14 @@
 package com.uaa.misgastosapp.ui
 
 import android.app.Activity
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.uaa.misgastosapp.BuildConfig
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
 
 /**
@@ -36,6 +40,7 @@ fun PremiumScreen(
     val context = LocalContext.current
     var showPurchaseDialog by remember { mutableStateOf(false) }
     var purchaseLoading by remember { mutableStateOf(false) }
+    var restoreLoading by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -43,7 +48,7 @@ fun PremiumScreen(
                 title = { Text("Mis Gastos Premium") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -98,6 +103,41 @@ fun PremiumScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Toggle de debug: solo existe en builds de debug (ver PremiumManager.setPremiumForTesting).
+            // En release, BuildConfig.DEBUG es una constante fija en `false` y R8 elimina esta
+            // seccion entera como codigo muerto, asi que no llega al APK que se publica.
+            if (BuildConfig.DEBUG) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "🛠️ Simular Premium (debug)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Solo visible en builds de debug. No usa Billing real.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        Switch(
+                            checked = isPremium,
+                            onCheckedChange = { premiumManager.setPremiumForTesting(it) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // ========== LÍMITES EXPANDIDOS ==========
             SectionHeader("📊 Datos Ilimitados")
 
@@ -122,6 +162,11 @@ fun PremiumScreen(
                 description = "Controla todos tus presupuestos (Free: 3)"
 
             )
+            PremiumBenefitItem(
+                icon = Icons.Default.AccountBalance,
+                title = "Cuentas Bancarias Ilimitadas",
+                description = "Separa tus gastos por banco sin límite (Free: ${PremiumLimits.FREE_MAX_ACCOUNTS})"
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -131,106 +176,28 @@ fun PremiumScreen(
             PremiumBenefitItem(
                 icon = Icons.Default.PictureAsPdf,
                 title = "Exportar PDF",
-                description = "Genera reportes mensuales y anuales"
+                description = "Genera un reporte con todas tus transacciones"
             )
             PremiumBenefitItem(
                 icon = Icons.Default.TableChart,
                 title = "Exportar Excel/CSV",
                 description = "Descarga tus datos para análisis externo"
             )
-            PremiumBenefitItem(
-                icon = Icons.Default.CloudUpload,
-                title = "Backup a Google Drive",
-                description = "Respaldo automático en la nube"
-            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ========== GRÁFICOS AVANZADOS ==========
-            SectionHeader("📈 Análisis Avanzado")
-
-            PremiumBenefitItem(
-                icon = Icons.Default.ShowChart,
-                title = "Gráficos Interactivos",
-                description = "Zoom, filtros y detalles por categoría"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.CompareArrows,
-                title = "Comparativa Mes a Mes",
-                description = "Compara tus gastos entre períodos"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.TrendingUp,
-                title = "Predicción de Gastos",
-                description = "Estimación basada en tu historial"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Analytics,
-                title = "Estadísticas Detalladas",
-                description = "Patrones de consumo y tendencias"
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ========== PERSONALIZACIÓN ==========
+            // ========== PERSONALIZACIÓN Y EXPERIENCIA ==========
             SectionHeader("🎨 Personalización")
 
             PremiumBenefitItem(
                 icon = Icons.Default.Palette,
                 title = "5+ Temas Exclusivos",
-                description = "Oscuro premium, colores personalizados"
+                description = "Elegí el color de la app tocando el ícono de paleta en Inicio"
             )
             PremiumBenefitItem(
-                icon = Icons.Default.Widgets,
-                title = "Widgets para Home",
-                description = "Resumen rápido en tu pantalla"
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ========== FUNCIONALIDADES EXCLUSIVAS ==========
-            SectionHeader("⭐ Exclusivo Premium")
-
-            PremiumBenefitItem(
-                icon = Icons.Default.AttachMoney,
-                title = "Multi-Divisa",
-                description = "USD, EUR, BRL, PYG y más"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Search,
-                title = "Búsqueda Avanzada",
-                description = "Filtra por fecha, monto y categoría"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Label,
-                title = "Etiquetas",
-                description = "Organiza transacciones con tags"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Notifications,
-                title = "Alertas Inteligentes",
-                description = "Avisos de gasto inusual o metas alcanzadas"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Flight,
-                title = "Modo Viaje",
-                description = "Separa gastos por destino"
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ========== SOPORTE ==========
-            SectionHeader("🤝 Soporte")
-
-            PremiumBenefitItem(
-                icon = Icons.Default.Support,
-                title = "Soporte Prioritario",
-                description = "Respuesta en menos de 24 horas"
-            )
-            PremiumBenefitItem(
-                icon = Icons.Default.Update,
-                title = "Acceso Anticipado",
-                description = "Prueba nuevas funciones primero"
+                icon = Icons.Default.Block,
+                title = "Sin Publicidad",
+                description = "Navegá sin banners en toda la app"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -332,6 +299,32 @@ fun PremiumScreen(
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // permite recuperar la compra en una reinstalacion o un dispositivo nuevo,
+                // en vez de depender solo de la restauracion silenciosa al conectar el BillingClient.
+                TextButton(
+                    onClick = {
+                        restoreLoading = true
+                        premiumManager.restorePurchases { found ->
+                            restoreLoading = false
+                            Toast.makeText(
+                                context,
+                                if (found) "¡Compra restaurada! Ya tenés Premium." else "No se encontró ninguna compra de Premium para restaurar.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    enabled = !restoreLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (restoreLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Restaurar compras")
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

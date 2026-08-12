@@ -34,6 +34,16 @@ class CategoryRepository(private val categoryDao: CategoryDao) {
         return categoryDao.insert(CategoryEntity(name = name))
     }
 
+    // esta es una funcion suspendida para renombrar una categoria existente.
+    suspend fun updateCategory(id: Int, newName: String) {
+        val existingCategories = allCategories.first()
+        // se permite que coincida con su propio nombre actual (no es un duplicado real).
+        if (existingCategories.any { it.id != id && it.name.equals(newName, ignoreCase = true) }) {
+            throw IllegalStateException("La categoría '$newName' ya existe.")
+        }
+        categoryDao.update(id, newName)
+    }
+
     // esta es una funcion suspendida para borrar una categoria.
     suspend fun deleteCategory(category: Category) {
         // se convierte el objeto 'category' (del modelo de la app) a un 'categoryentity' (de la base de datos).

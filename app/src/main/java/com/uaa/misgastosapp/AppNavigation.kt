@@ -31,6 +31,11 @@ object Routes {
     const val PREMIUM = "premium"
     const val EXPORT = "export"
     const val THEMES = "themes"
+    const val MANAGE_ACCOUNTS = "manage_accounts"
+    const val ADD_ACCOUNT = "add_account"
+    const val ARG_ACCOUNT_ID = "accountId"
+    const val ARG_TRANSACTION_ID = "transactionId"
+    const val ARG_PRESELECTED_ACCOUNT_ID = "preselectedAccountId"
 }
 
 /**
@@ -64,8 +69,15 @@ fun AppNavigation(navController: NavHostController) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onFinish = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                    // si hay una pantalla anterior en el backstack, es porque el usuario volvio a
+                    // ver el onboarding desde dentro de la app (no es el primer inicio); en ese
+                    // caso simplemente se vuelve a esa pantalla en vez de forzar ir a Home.
+                    if (navController.previousBackStackEntry != null) {
+                        navController.popBackStack()
+                    } else {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -77,7 +89,27 @@ fun AppNavigation(navController: NavHostController) {
 
         // Pantalla principal
         composable(Routes.HOME) { HomeScreen(navController) }
-        composable(Routes.ADD_TRANSACTION) { AddTransactionScreen(navController) }
+
+        // Agregar/Editar transaccion. transactionId (editar) y preselectedAccountId (preseleccionar
+        // la cuenta que estaba filtrada en Inicio al agregar una nueva) son independientes y
+        // opcionales, por eso van como query params en vez de segmentos de la ruta.
+        composable(
+            route = "${Routes.ADD_TRANSACTION}?${Routes.ARG_TRANSACTION_ID}={${Routes.ARG_TRANSACTION_ID}}" +
+                "&${Routes.ARG_PRESELECTED_ACCOUNT_ID}={${Routes.ARG_PRESELECTED_ACCOUNT_ID}}",
+            arguments = listOf(
+                navArgument(Routes.ARG_TRANSACTION_ID) { type = NavType.IntType; defaultValue = -1 },
+                navArgument(Routes.ARG_PRESELECTED_ACCOUNT_ID) { type = NavType.IntType; defaultValue = -1 }
+            )
+        ) { backStackEntry ->
+            val transactionId = backStackEntry.arguments?.getInt(Routes.ARG_TRANSACTION_ID)
+            val preselectedAccountId = backStackEntry.arguments?.getInt(Routes.ARG_PRESELECTED_ACCOUNT_ID)
+            AddTransactionScreen(
+                navController = navController,
+                transactionId = if (transactionId == -1) null else transactionId,
+                preselectedAccountId = if (preselectedAccountId == -1) null else preselectedAccountId
+            )
+        }
+
         composable(Routes.ADD_CATEGORY) { AddCategoryScreen(navController) }
         composable(Routes.CATEGORIES_LIST) { CategoriesListScreen(navController) }
         composable(Routes.MANAGE_BUDGETS) { ManageBudgetsScreen(navController) }
@@ -126,5 +158,21 @@ fun AppNavigation(navController: NavHostController) {
                 onBack = { navController.popBackStack() }
             )
         }
+
+        // Cuentas/bancos (opcional)
+        composable(Routes.MANAGE_ACCOUNTS) { ManageAccountsScreen(navController) }
+
+        // Agregar/Editar cuenta
+        composable(
+            route = "${Routes.ADD_ACCOUNT}/{${Routes.ARG_ACCOUNT_ID}}",
+            arguments = listOf(navArgument(Routes.ARG_ACCOUNT_ID) {
+                type = NavType.IntType
+                defaultValue = -1
+            })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getInt(Routes.ARG_ACCOUNT_ID)
+            AddAccountScreen(navController = navController, accountId = if (accountId == -1) null else accountId)
+        }
+        composable(Routes.ADD_ACCOUNT) { AddAccountScreen(navController = navController, accountId = null) }
     }
 }

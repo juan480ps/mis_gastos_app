@@ -24,15 +24,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
 import com.uaa.misgastosapp.ui.components.AdBanner
+import com.uaa.misgastosapp.ui.components.AppBottomNavBar
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.Budget
 import com.uaa.misgastosapp.model.Transaction
+import com.uaa.misgastosapp.ui.viewmodel.AccountViewModel
 import com.uaa.misgastosapp.ui.viewmodel.AuthViewModel
 import com.uaa.misgastosapp.ui.viewmodel.BudgetViewModel
 import com.uaa.misgastosapp.ui.viewmodel.RecurringTransactionViewModel
@@ -45,12 +48,6 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.Locale
 
-// se define una data class para los elementos de la barra de navegacion inferior.
-private data class BottomNavItem(
-    val label: String,
-    val icon: ImageVector,
-    val route: String
-)
 // se suprime una advertencia sobre la indentacion que puede ser un falso positivo.
 @SuppressLint("SuspiciousIndentation")
 // se asegura que el codigo use apis disponibles a partir de android oreo.
@@ -64,11 +61,22 @@ fun HomeScreen(
     transactionViewModel: TransactionViewModel = viewModel(),
     budgetViewModel: BudgetViewModel = viewModel(),
     recurringTransactionViewModel: RecurringTransactionViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    accountViewModel: AccountViewModel = viewModel()
 ) {
     // se obtienen los estados desde los diferentes viewmodels.
-    val transactions by transactionViewModel.transactions.collectAsState()
+    val allTransactions by transactionViewModel.transactions.collectAsState()
     val operationStatus by transactionViewModel.operationStatus.collectAsState()
+    // filtro opcional por cuenta: por defecto (null = "Todas las cuentas") el balance y la lista
+    // se comportan exactamente como antes, sumando todo en una sola bolsa.
+    // se guarda solo el id (rememberSaveable) en vez del objeto Account: como Home es el destino
+    // inicial, sigue en el backstack mientras se navega a otras pantallas, asi que este estado
+    // sobrevive el viaje de ida y vuelta (antes, con 'remember' comun, se perdia al volver).
+    val accounts by accountViewModel.accounts.collectAsState()
+    var accountFilterId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val accountFilter = accounts.find { it.id == accountFilterId }
+    var accountFilterExpanded by remember { mutableStateOf(false) }
+    val transactions = if (accountFilter == null) allTransactions else allTransactions.filter { it.accountId == accountFilter?.id }
     val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState(initial = emptyList())
     val currentYearMonth by budgetViewModel.currentMonthYear.collectAsState()
     // se configuran formatos de moneda y fecha.
@@ -79,7 +87,19 @@ fun HomeScreen(
     val monthHeaderFormatter = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale("es", "ES"))
     // se definen estados para manejar dialogos y la visibilidad de las transacciones.
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
-    var collapsedMonths by rememberSaveable { mutableStateOf(emptySet<YearMonth>()) }
+    // por defecto, los meses anteriores al actual arrancan colapsados y el mes actual expandido;
+    // si el usuario toca el encabezado de un mes para cambiarlo, esa eleccion se recuerda y
+    // tiene prioridad sobre el default (para ambos sentidos: expandir un mes viejo o colapsar
+    // el mes actual), incluso si mas tarde aparecen transacciones nuevas en otros meses.
+    var userExpandedMonths by rememberSaveable { mutableStateOf(emptySet<YearMonth>()) }
+    var userCollapsedMonths by rememberSaveable { mutableStateOf(emptySet<YearMonth>()) }
+    // el resumen de presupuestos tambien se puede colapsar, y se recuerda la eleccion.
+    var budgetSummaryCollapsed by rememberSaveable { mutableStateOf(false) }
+    fun isMonthCollapsed(yearMonth: YearMonth): Boolean = when {
+        yearMonth in userExpandedMonths -> false
+        yearMonth in userCollapsedMonths -> true
+        else -> yearMonth != YearMonth.now()
+    }
 
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
     var showDeleteTransactionDialog by rememberSaveable { mutableStateOf(false) }
@@ -88,14 +108,6 @@ fun HomeScreen(
     val userName = if (isLoggedIn) authViewModel.getCurrentUserName() ?: "Usuario" else "Invitado"
     val isOnline by authViewModel.isOnlineMode.collectAsState()
     val context = LocalContext.current
-
-    // se define la lista de elementos para la barra de navegacion inferior.
-    val navigationItems = listOf(
-        BottomNavItem("Categorías", Icons.Default.Category, Routes.CATEGORIES_LIST),
-        BottomNavItem("Presupuestos", Icons.Default.Assessment, Routes.MANAGE_BUDGETS),
-        BottomNavItem("Recurrentes", Icons.Default.Autorenew, Routes.MANAGE_RECURRING_TRANSACTIONS),
-        BottomNavItem("Gráficos", Icons.Default.PieChart, Routes.CHARTS_SCREEN),
-    )
 
     // se observa el estado de las operaciones para mostrar mensajes.
     LaunchedEffect(operationStatus) {
@@ -144,6 +156,30 @@ fun HomeScreen(
                             )
                         }
                     }
+                    // Botón Temas: visible siempre, ThemesScreen ya bloquea los temas premium si no corresponde.
+                    IconButton(onClick = { navController.navigate(Routes.THEMES) }) {
+                        Icon(
+                            Icons.Default.Palette,
+                            contentDescription = "Temas",
+                            tint = Color.White
+                        )
+                    }
+                    // Botón Cuentas: separar gastos por banco es opcional, se accede desde acá.
+                    IconButton(onClick = { navController.navigate(Routes.MANAGE_ACCOUNTS) }) {
+                        Icon(
+                            Icons.Default.AccountBalance,
+                            contentDescription = "Cuentas",
+                            tint = Color.White
+                        )
+                    }
+                    // Botón Ayuda: vuelve a mostrar la pantalla de bienvenida que explica la app.
+                    IconButton(onClick = { navController.navigate(Routes.ONBOARDING) }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.HelpOutline,
+                            contentDescription = "Ayuda",
+                            tint = Color.White
+                        )
+                    }
                     // Botón Premium
                     if (!isPremium) {
                         IconButton(onClick = { navController.navigate(Routes.PREMIUM) }) {
@@ -164,37 +200,22 @@ fun HomeScreen(
                 }
             )
         },
-        bottomBar = {
-            // se define la barra de navegacion inferior.
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                NavigationBar(
-                    modifier = Modifier.clip(RoundedCornerShape(24.dp)),
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    navigationItems.forEach { item ->
-                        NavigationBarItem(
-                            selected = false,
-                            onClick = { navController.navigate(item.route) },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                            alwaysShowLabel = true,
-                            colors = NavigationBarItemDefaults.colors(
-                                unselectedIconColor = Color.White,
-                                unselectedTextColor = Color.White,
-                                indicatorColor = Color.Transparent
-                            )
-                        )
-                    }
-                }
-            }
-        },
+        bottomBar = { AppBottomNavBar(navController, Routes.HOME) },
         floatingActionButton = {
             // boton flotante para añadir nuevas transacciones.
             FloatingActionButton(
                 onClick = {
-                    navController.navigate(Routes.ADD_TRANSACTION)
+                    // si hay una cuenta especifica filtrada (no "Todas las cuentas"), la nueva
+                    // transaccion la trae preseleccionada en vez de arrancar en "Sin cuenta".
+                    val route = if (accountFilterId != null) {
+                        "${Routes.ADD_TRANSACTION}?${Routes.ARG_PRESELECTED_ACCOUNT_ID}=$accountFilterId"
+                    } else {
+                        Routes.ADD_TRANSACTION
+                    }
+                    navController.navigate(route)
                 },
-                containerColor = Color(android.graphics.Color.parseColor("#c2b1f0")),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Agregar Gasto")
@@ -219,33 +240,84 @@ fun HomeScreen(
                 .weight(1f)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // selector opcional de cuenta: solo aparece si el usuario creo alguna cuenta.
+            // "Todas las cuentas" (por defecto) mantiene el balance/lista de siempre, sin filtrar.
+            if (accounts.isNotEmpty()) {
+                item {
+                    Box(modifier = Modifier.padding(bottom = 4.dp)) {
+                        TextButton(onClick = { accountFilterExpanded = true }) {
+                            Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(accountFilter?.name ?: "Todas las cuentas")
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = accountFilterExpanded,
+                            onDismissRequest = { accountFilterExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Todas las cuentas") },
+                                onClick = {
+                                    accountFilterId = null
+                                    accountFilterExpanded = false
+                                }
+                            )
+                            accounts.forEach { account ->
+                                DropdownMenuItem(
+                                    text = { Text(account.name) },
+                                    onClick = {
+                                        accountFilterId = account.id
+                                        accountFilterExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // se muestra una tarjeta con el resumen del saldo.
             item {
                 SummaryCard(balance = transactions.sumOf { it.amount })
             }
 
-            // se muestra un titulo para la seccion de presupuestos.
+            // se muestra un titulo para la seccion de presupuestos, clickeable para colapsarla
+            // (igual que los encabezados de mes de las transacciones).
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Resumen de Presupuestos (${currentYearMonth.format(monthDisplayFormatter).replaceFirstChar { it.uppercase() }})",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { budgetSummaryCollapsed = !budgetSummaryCollapsed }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Resumen de Presupuestos (${currentYearMonth.format(monthDisplayFormatter).replaceFirstChar { it.uppercase() }})",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = if (budgetSummaryCollapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                        contentDescription = if (budgetSummaryCollapsed) "Expandir presupuestos" else "Minimizar presupuestos"
+                    )
+                }
             }
 
-            // se muestran los presupuestos del mes.
-            if (budgetsWithSpending.any { it.amount > 0 }) {
-                items(budgetsWithSpending.filter { it.amount > 0 }) { budgetItem ->
-                    BudgetStatusItem(budgetItem, currencyFormat)
-                }
-            } else {
-                item {
-                    Text(
-                        "No hay presupuestos configurados para este mes. Ve a 'Gestionar Presupuestos'.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+            // se muestran los presupuestos del mes, salvo que el usuario haya colapsado la seccion.
+            if (!budgetSummaryCollapsed) {
+                if (budgetsWithSpending.any { it.amount > 0 }) {
+                    items(budgetsWithSpending.filter { it.amount > 0 }) { budgetItem ->
+                        BudgetStatusItem(budgetItem, currencyFormat)
+                    }
+                } else {
+                    item {
+                        Text(
+                            "No hay presupuestos configurados para este mes. Ve a 'Gestionar Presupuestos'.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
             }
 
@@ -299,10 +371,15 @@ fun HomeScreen(
                                 .fillMaxWidth()
                                 .padding(top = 16.dp, bottom = 8.dp)
                                 .clickable {
-                                    collapsedMonths = if (yearMonth!! in collapsedMonths) {
-                                        collapsedMonths - yearMonth
+                                    // se guarda la eleccion del usuario en el set que corresponda,
+                                    // y se la quita del otro para que no quede una preferencia vieja
+                                    // contradictoria si el usuario cambia de opinion mas de una vez.
+                                    if (isMonthCollapsed(yearMonth!!)) {
+                                        userExpandedMonths = userExpandedMonths + yearMonth
+                                        userCollapsedMonths = userCollapsedMonths - yearMonth
                                     } else {
-                                        collapsedMonths + yearMonth
+                                        userCollapsedMonths = userCollapsedMonths + yearMonth
+                                        userExpandedMonths = userExpandedMonths - yearMonth
                                     }
                                 },
                             verticalAlignment = Alignment.CenterVertically
@@ -321,7 +398,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                                 modifier = Modifier.weight(1f)
                             )
-                            val isCollapsed = yearMonth in collapsedMonths
+                            val isCollapsed = isMonthCollapsed(yearMonth!!)
                             Icon(
                                 imageVector = if (isCollapsed) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                                 contentDescription = if (isCollapsed) "Expandir mes" else "Minimizar mes",
@@ -332,10 +409,11 @@ fun HomeScreen(
                     }
 
                     // si el mes no esta colapsado, se muestran sus transacciones.
-                    if (yearMonth !in collapsedMonths) {
+                    if (!isMonthCollapsed(yearMonth!!)) {
                         items(monthTransactions, key = { it.id }) { tx ->
                             TransactionItem(
                                 transaction = tx,
+                                onEdit = { navController.navigate("${Routes.ADD_TRANSACTION}?${Routes.ARG_TRANSACTION_ID}=${tx.id}") },
                                 onDelete = {
                                     transactionToDelete = tx
                                     showDeleteTransactionDialog = true

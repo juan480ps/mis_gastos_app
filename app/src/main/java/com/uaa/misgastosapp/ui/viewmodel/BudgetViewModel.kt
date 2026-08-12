@@ -8,10 +8,10 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.uaa.misgastosapp.data.AppDatabase
-import com.uaa.misgastosapp.data.BudgetEntity
+import com.uaa.misgastosapp.data.repository.AppRepositories
 import com.uaa.misgastosapp.data.repository.BudgetRepository
 import com.uaa.misgastosapp.model.Budget
+import com.uaa.misgastosapp.utils.Result
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.YearMonth
@@ -27,10 +27,7 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
     // el bloque 'init' se ejecuta cuando se crea una instancia de este viewmodel.
     init {
-        // se obtiene la instancia de la base de datos.
-        val db = AppDatabase.getInstance(application)
-        // se inicializa el repositorio, pasandole los daos necesarios.
-        repository = BudgetRepository(db.budgetDao(), db.categoryDao(), db.transactionDao())
+        repository = AppRepositories.budgetRepository(application)
     }
 
     // se crea un 'stateflow' para guardar el mes y año actual que se esta viendo en la pantalla.
@@ -44,23 +41,43 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         .map { it.format(DateTimeFormatter.ofPattern("yyyy-MM")) }
         .distinctUntilChanged() // solo emite si el mes realmente cambio
 
+    // se crea un 'stateflow' para comunicar el estado de setBudget, igual que en Transaction/CategoryViewModel.
+    private val _operationStatus = MutableStateFlow<Result<String>?>(null)
+    val operationStatus: StateFlow<Result<String>?> = _operationStatus.asStateFlow()
+
+    // true hasta la primera emision (o error). asi la UI distingue "cargando" de "sin categorias
+    // para presupuestar", que antes se veian igual (lista vacia en ambos casos).
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     // este es el 'stateflow' principal que la interfaz de usuario observara para mostrar la lista de presupuestos.
     val budgetsWithSpendingForCurrentMonth: StateFlow<List<Budget>> =
         repository.getBudgetsWithSpendingForMonth(currentMonthYearString)
             .distinctUntilChanged() // evita recomposiciones si los datos no cambiaron
+            .onEach { _isLoading.value = false }
             .catch { e ->
                 Log.e("BudgetVM", "Error en el flujo de presupuestos", e)
+                _isLoading.value = false
                 emit(emptyList())
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // cuantos presupuestos "todos los meses" hay en total, para el limite del plan Free
+    // (independiente del mes que se este viendo).
+    val recurringBudgetsCount: StateFlow<Int> = repository.recurringBudgetsCount
+        .catch { e ->
+            Log.e("BudgetVM", "Error en el flujo de presupuestos recurrentes", e)
+            emit(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // esta funcion permite que la interfaz de usuario cambie el mes y año que se esta mostrando.
     fun setCurrentMonthYear(yearMonth: YearMonth) {
         _currentMonthYear.value = yearMonth
     }
 
-    // esta funcion obtiene el presupuesto para una categoria y mes especificos.
-    fun getBudgetForCategory(categoryId: Int, monthYear: String): Flow<BudgetEntity?> {
+    // esta funcion obtiene el presupuesto (modelo de dominio) para una categoria y mes especificos.
+    fun getBudgetForCategory(categoryId: Int, monthYear: String): Flow<Budget?> {
         return repository.getBudgetForCategoryAndMonth(categoryId, monthYear)
             .catch { e ->
                 // si ocurre un error, se registra y se emite un valor nulo.
@@ -69,20 +86,41 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
             }
     }
 
-    // esta funcion permite establecer o actualizar un presupuesto.
-    fun setBudget(categoryId: Int, amount: Double, monthYear: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    // esta funcion permite establecer o actualizar un presupuesto. isRecurring=true lo aplica a
+    // todos los meses en vez de solo al mes indicado.
+    fun setBudget(categoryId: Int, amount: Double, monthYear: String, isRecurring: Boolean = false) {
         // se inicia una corutina para no bloquear la interfaz.
         viewModelScope.launch {
+            _operationStatus.value = Result.Loading
             try {
                 // se llama al metodo del repositorio para guardar el presupuesto.
-                repository.setBudget(categoryId, amount, monthYear)
-                // si todo sale bien, se llama a la funcion de exito.
-                onSuccess()
+                repository.setBudget(categoryId, amount, monthYear, isRecurring)
+                _operationStatus.value = Result.Success(
+                    if (isRecurring) "Presupuesto guardado para todos los meses" else "Presupuesto guardado"
+                )
             } catch (e: Exception) {
-                // si hay un error, se registra y se llama a la funcion de error.
+                // si hay un error, se registra y se actualiza el estado.
                 Log.e("BudgetVM", "Error al establecer presupuesto", e)
-                onError(e.message ?: "Error inesperado.")
+                _operationStatus.value = Result.Error(e.message ?: "Error inesperado.")
             }
         }
+    }
+
+    // quita un presupuesto establecido (la categoria vuelve a "Sin presupuesto establecido").
+    fun deleteBudget(categoryId: Int, monthYear: String, isRecurring: Boolean = false) {
+        viewModelScope.launch {
+            _operationStatus.value = Result.Loading
+            try {
+                repository.deleteBudget(categoryId, monthYear, isRecurring)
+                _operationStatus.value = Result.Success("Presupuesto eliminado")
+            } catch (e: Exception) {
+                Log.e("BudgetVM", "Error al eliminar presupuesto", e)
+                _operationStatus.value = Result.Error(e.message ?: "Error inesperado.")
+            }
+        }
+    }
+
+    fun clearOperationStatus() {
+        _operationStatus.value = null
     }
 }

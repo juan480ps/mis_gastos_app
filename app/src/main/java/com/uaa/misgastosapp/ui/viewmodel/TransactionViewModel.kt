@@ -8,10 +8,11 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.uaa.misgastosapp.data.AppDatabase
+import com.uaa.misgastosapp.data.repository.AppRepositories
 import com.uaa.misgastosapp.data.repository.TransactionRepository
 import com.uaa.misgastosapp.model.Transaction
 import com.uaa.misgastosapp.utils.Result
+import com.uaa.misgastosapp.utils.capitalizeFirst
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,17 +25,12 @@ import java.time.LocalDate
 // se asegura que este codigo solo se ejecute en versiones de android compatibles.
 @RequiresApi(Build.VERSION_CODES.O)
 // aca se define el viewmodel para las transacciones (ingresos y gastos).
-class TransactionViewModel(application: Application) : AndroidViewModel(application) {
-    // se declara el repositorio de transacciones, que sera la unica fuente de datos.
-    private val repository: TransactionRepository
-
-    // el bloque 'init' se ejecuta cuando se crea una instancia del viewmodel.
-    init {
-        // se obtiene la instancia de la base de datos.
-        val db = AppDatabase.getInstance(application)
-        // se inicializa el repositorio, pasandole los daos necesarios.
-        repository = TransactionRepository(db.transactionDao())
-    }
+// el repositorio se puede inyectar (para tests); @JvmOverloads genera el constructor de un solo
+// parametro que necesita el ViewModelProvider por defecto para instanciarlo en produccion.
+class TransactionViewModel @JvmOverloads constructor(
+    application: Application,
+    private val repository: TransactionRepository = AppRepositories.transactionRepository(application)
+) : AndroidViewModel(application) {
 
     // se crea un 'stateflow' para comunicar el estado de una operacion (como agregar o borrar).
     // es privado para que solo el viewmodel lo pueda modificar.
@@ -48,20 +44,35 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     // esta funcion se encarga de añadir una nueva transaccion.
-    fun addTransaction(title: String, amount: Double, date: String, categoryId: Int?) {
+    // accountId es opcional: asociar una cuenta/banco nunca es obligatorio.
+    fun addTransaction(title: String, amount: Double, date: String, categoryId: Int?, accountId: Int? = null) {
         // se inicia una corutina para no bloquear la interfaz.
         viewModelScope.launch {
             try {
                 // se actualiza el estado a 'cargando'.
                 _operationStatus.value = Result.Loading
                 // se llama al repositorio para que inserte la transaccion.
-                repository.insertTransaction(title, amount, date, categoryId)
+                repository.insertTransaction(title.capitalizeFirst(), amount, date, categoryId, accountId)
                 // si es exitoso, se actualiza el estado a 'exito' con un mensaje.
                 _operationStatus.value = Result.Success("Transacción agregada exitosamente")
             } catch (e: Exception) {
                 // si hay un error, se registra y se actualiza el estado a 'error'.
                 Log.e("TransactionVM", "Error al agregar transacción", e)
                 _operationStatus.value = Result.Error("Error al agregar transacción: ${e.message}")
+            }
+        }
+    }
+
+    // esta funcion se encarga de actualizar una transaccion existente.
+    fun updateTransaction(id: Int, title: String, amount: Double, date: String, categoryId: Int?, accountId: Int?) {
+        viewModelScope.launch {
+            try {
+                _operationStatus.value = Result.Loading
+                repository.updateTransaction(id, title.capitalizeFirst(), amount, date, categoryId, accountId)
+                _operationStatus.value = Result.Success("Transacción actualizada")
+            } catch (e: Exception) {
+                Log.e("TransactionVM", "Error al actualizar transacción", e)
+                _operationStatus.value = Result.Error("Error al actualizar transacción: ${e.message}")
             }
         }
     }

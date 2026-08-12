@@ -3,6 +3,7 @@
 package com.uaa.misgastosapp.ui
 
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,10 +25,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.uaa.misgastosapp.Routes
 import androidx.compose.ui.platform.LocalContext
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.model.RecurringTransaction
 import com.uaa.misgastosapp.ui.components.AdBanner
+import com.uaa.misgastosapp.ui.components.AppBottomNavBar
 import com.uaa.misgastosapp.ui.viewmodel.RecurringTransactionViewModel
+import com.uaa.misgastosapp.utils.Result
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -45,6 +49,25 @@ fun ManageRecurringTransactionsScreen(
 ) {
     // se obtiene la lista de transacciones recurrentes desde el viewmodel.
     val recurringTransactions by recurringViewModel.recurringTransactions.collectAsState()
+    val isLoading by recurringViewModel.isLoading.collectAsState()
+    val operationStatus by recurringViewModel.operationStatus.collectAsState()
+    val context = LocalContext.current
+
+    // se observa el resultado de eliminar; antes no habia ningun feedback al usuario.
+    LaunchedEffect(operationStatus) {
+        when (val status = operationStatus) {
+            is Result.Success -> {
+                Toast.makeText(context, status.data, Toast.LENGTH_SHORT).show()
+                recurringViewModel.clearOperationStatus()
+            }
+            is Result.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_LONG).show()
+                recurringViewModel.clearOperationStatus()
+            }
+            is Result.Loading -> {}
+            null -> {}
+        }
+    }
 
     // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
@@ -64,11 +87,23 @@ fun ManageRecurringTransactionsScreen(
                 }
             )
         },
+        // barra inferior compartida con Inicio/Categorías/Presupuestos/Gráficos, para que no
+        // desaparezca al entrar a esta sección.
+        bottomBar = { AppBottomNavBar(navController, Routes.MANAGE_RECURRING_TRANSACTIONS) },
         // se define un boton de accion flotante para añadir nuevas transacciones recurrentes.
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                // se navega a la pantalla de añadir/editar sin pasarle un id, lo que indica que es para añadir una nueva.
-                navController.navigate(Routes.ADD_EDIT_RECURRING_TRANSACTION)
+                // se avisa el limite del plan Free antes de abrir el formulario, no despues de llenarlo.
+                if (!PremiumLimits.canAddRecurringTransaction(context, recurringTransactions.size)) {
+                    Toast.makeText(
+                        context,
+                        "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_RECURRING_TRANSACTIONS} recurrentes del plan Free. Pasate a Premium para recurrentes ilimitadas.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    // se navega a la pantalla de añadir/editar sin pasarle un id, lo que indica que es para añadir una nueva.
+                    navController.navigate(Routes.ADD_EDIT_RECURRING_TRANSACTION)
+                }
             },
                 containerColor = MaterialTheme.colorScheme.primary,
                 shape = CircleShape
@@ -78,8 +113,12 @@ fun ManageRecurringTransactionsScreen(
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(8.dp)) {
-            // si no hay transacciones, se muestra un mensaje.
-            if (recurringTransactions.isEmpty()) {
+            // se distingue "cargando" de "realmente no hay recurrentes configuradas".
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (recurringTransactions.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No hay transacciones recurrentes configuradas.")
                 }
@@ -103,7 +142,8 @@ fun ManageRecurringTransactionsScreen(
                 }
             }
             
-            // Banner AdMob (solo usuarios free)
+            // Banner AdMob (solo usuarios free). Con la barra inferior de navegacion presente,
+            // el FAB flota por encima de ella en vez de sobre el contenido.
             val context = LocalContext.current
             val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
             if (!isPremium) {

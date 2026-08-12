@@ -4,6 +4,7 @@ package com.uaa.misgastosapp.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -11,12 +12,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
+import com.uaa.misgastosapp.utils.Result
 
 // se usa esta anotacion para poder utilizar componentes de material 3 que aun son experimentales.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,6 +31,30 @@ fun AddCategoryScreen(navController: NavController, categoryViewModel: CategoryV
     var categoryName by remember { mutableStateOf("") }
     // se obtiene el contexto actual, que es necesario para mostrar mensajes (toast).
     val context = LocalContext.current
+    val categories by categoryViewModel.categories.collectAsState()
+    val operationStatus by categoryViewModel.operationStatus.collectAsState()
+
+    // se observa el resultado de addCategory: exito muestra el toast y vuelve atras, error solo avisa.
+    LaunchedEffect(operationStatus) {
+        when (val status = operationStatus) {
+            is Result.Success -> {
+                Toast.makeText(context, status.data, Toast.LENGTH_SHORT).show()
+                categoryViewModel.clearOperationStatus()
+                // se le pasa el id de la categoria recien creada a la pantalla anterior, para que
+                // pueda dejarla seleccionada en su combo en vez de quedar en "Sin Categoría".
+                navController.previousBackStackEntry?.savedStateHandle?.set(
+                    "newCategoryId", categoryViewModel.lastCreatedCategoryId.value
+                )
+                navController.popBackStack()
+            }
+            is Result.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_LONG).show()
+                categoryViewModel.clearOperationStatus()
+            }
+            is Result.Loading -> {}
+            null -> {}
+        }
+    }
 
     // se usa el componente scaffold que provee una estructura basica de pantalla con barra superior, etc.
     Scaffold(
@@ -69,7 +97,8 @@ fun AddCategoryScreen(navController: NavController, categoryViewModel: CategoryV
                 onValueChange = { categoryName = it },
                 label = { Text("Nombre de la Categoría") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
 
             // se crea el boton para guardar la categoria.
@@ -78,19 +107,18 @@ fun AddCategoryScreen(navController: NavController, categoryViewModel: CategoryV
                 onClick = {
                     // se comprueba que el nombre no este vacio.
                     if (categoryName.isNotBlank()) {
-                        // se llama a la funcion del viewmodel para añadir la categoria.
-                        categoryViewModel.addCategory(
-                            name = categoryName,
-                            // si la operacion es exitosa, se muestra un mensaje y se vuelve a la pantalla anterior.
-                            onSuccess = {
-                                Toast.makeText(context, "Categoría '$categoryName' añadida", Toast.LENGTH_SHORT).show()
-                                navController.popBackStack()
-                            },
-                            // si hay un error, se muestra el mensaje de error recibido del viewmodel.
-                            onError = { errorMsg ->
-                                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                            }
-                        )
+                        // se aplica el limite de categorias del plan Free antes de guardar.
+                        if (!PremiumLimits.canAddCategory(context, categories.size)) {
+                            Toast.makeText(
+                                context,
+                                "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_CATEGORIES} categorías del plan Free. Pasate a Premium para categorías ilimitadas.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@Button
+                        }
+                        // se llama a la funcion del viewmodel para añadir la categoria; el resultado
+                        // se maneja en el LaunchedEffect que observa operationStatus.
+                        categoryViewModel.addCategory(categoryName)
                     } else {
                         // si el nombre esta vacio, se muestra un mensaje de validacion.
                         Toast.makeText(context, "El nombre no puede estar vacío", Toast.LENGTH_SHORT).show()

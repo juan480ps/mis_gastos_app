@@ -1,6 +1,5 @@
 package com.uaa.misgastosapp.ui
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,44 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uaa.misgastosapp.data.PremiumManager
-
-/**
- * Tema de color de la app.
- */
-data class AppTheme(
-    val id: String,
-    val name: String,
-    val icon: ImageVector,
-    val primaryColor: Color,
-    val isPremium: Boolean
-)
-
-/**
- * Temas disponibles en la app.
- */
-object AppThemes {
-    val themes = listOf(
-        // Temas gratuitos
-        AppTheme("default", "Morado Clásico", Icons.Default.Palette, Color(0xFF6C63FF), isPremium = false),
-        AppTheme("blue", "Azul Profesional", Icons.Default.Water, Color(0xFF1976D2), isPremium = false),
-        AppTheme("green", "Verde Fresco", Icons.Default.Eco, Color(0xFF388E3C), isPremium = false),
-        
-        // Temas Premium
-        AppTheme("gold", "Dorado Premium", Icons.Default.Star, Color(0xFFFFB300), isPremium = true),
-        AppTheme("rose", "Rosa Elegante", Icons.Default.Favorite, Color(0xFFE91E63), isPremium = true),
-        AppTheme("midnight", "Medianoche", Icons.Default.DarkMode, Color(0xFF37474F), isPremium = true),
-        AppTheme("ocean", "Océano Profundo", Icons.Default.Waves, Color(0xFF0277BD), isPremium = true),
-        AppTheme("forest", "Bosque Mágico", Icons.Default.Park, Color(0xFF2E7D32), isPremium = true),
-        AppTheme("sunset", "Atardecer", Icons.Default.WbSunny, Color(0xFFFF6F00), isPremium = true)
-    )
-}
+import com.uaa.misgastosapp.ui.theme.AppTheme
+import com.uaa.misgastosapp.ui.theme.AppThemes
+import com.uaa.misgastosapp.ui.theme.ThemePrefs
 
 /**
  * Pantalla de selección de temas.
@@ -68,7 +39,10 @@ fun ThemesScreen(
 ) {
     val isPremium by premiumManager.isPremium.collectAsState()
     val context = LocalContext.current
-    var selectedTheme by remember { mutableStateOf(getSavedTheme(context)) }
+    // el estado viene de ThemePrefs (compartido con GastosTheme), asi que elegir un tema aca
+    // cambia de inmediato el color de toda la app, no solo el resaltado de esta pantalla.
+    val selectedThemeState = ThemePrefs.currentThemeId(context)
+    val selectedTheme = selectedThemeState.value ?: "default"
     var showPremiumDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -77,7 +51,7 @@ fun ThemesScreen(
                 title = { Text("Temas") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -106,10 +80,7 @@ fun ThemesScreen(
                     ThemeCard(
                         theme = theme,
                         isSelected = selectedTheme == theme.id,
-                        onClick = {
-                            selectedTheme = theme.id
-                            saveTheme(context, theme.id)
-                        }
+                        onClick = { ThemePrefs.selectTheme(context, theme.id) }
                     )
                 }
             }
@@ -150,8 +121,7 @@ fun ThemesScreen(
                         isLocked = !isPremium,
                         onClick = {
                             if (isPremium) {
-                                selectedTheme = theme.id
-                                saveTheme(context, theme.id)
+                                ThemePrefs.selectTheme(context, theme.id)
                             } else {
                                 showPremiumDialog = true
                             }
@@ -237,19 +207,4 @@ private fun ThemeCard(
             }
         }
     }
-}
-
-private const val THEME_PREFS = "theme_prefs"
-private const val KEY_THEME = "selected_theme"
-
-private fun getSavedTheme(context: Context): String {
-    return context.getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
-        .getString(KEY_THEME, "default") ?: "default"
-}
-
-private fun saveTheme(context: Context, themeId: String) {
-    context.getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(KEY_THEME, themeId)
-        .apply()
 }

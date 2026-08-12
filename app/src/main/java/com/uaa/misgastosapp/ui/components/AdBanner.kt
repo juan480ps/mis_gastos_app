@@ -27,6 +27,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
+import com.uaa.misgastosapp.data.AdsManager
 
 /**
  * Banner de AdMob reutilizable.
@@ -39,10 +40,13 @@ fun AdBanner(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    
+    val isAdsReady by AdsManager.isReady.collectAsState()
+
     // Estado para saber si el ad cargó
     var adLoaded by remember { mutableStateOf(false) }
-    
+    // evita pedir el anuncio mas de una vez para el mismo AdView.
+    var adRequested by remember { mutableStateOf(false) }
+
     // Refresh el ad cuando la pantalla vuelve a estar visible
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -90,20 +94,24 @@ fun AdBanner(
                             Log.d("AdBanner", "✅ Ad loaded successfully!")
                             adLoaded = true
                         }
-                        
+
                         override fun onAdFailedToLoad(error: LoadAdError) {
-                            Log.e("AdBanner", "❌ Ad failed: ${error.message}")
+                            Log.e("AdBanner", "❌ Ad failed: ${error.message} (code ${error.code})")
                             adLoaded = false
+                            // se reintenta en la siguiente recomposicion si isAdsReady sigue en true.
+                            adRequested = false
                         }
                     }
-                    
-                    // Cargar anuncio
-                    loadAd(AdRequest.Builder().build())
                 }
             },
             update = { adView ->
-                // Actualizar si es necesario
-                Log.d("AdBanner", "Updating AdView")
+                // se espera a que MobileAds termine de inicializarse antes de pedir el anuncio;
+                // pedirlo antes (como hacia esta funcion originalmente) podia fallar segun que
+                // pantalla se abriera primero al iniciar la app.
+                if (isAdsReady && !adRequested) {
+                    adRequested = true
+                    adView.loadAd(AdRequest.Builder().build())
+                }
             },
             modifier = Modifier
                 .fillMaxSize()

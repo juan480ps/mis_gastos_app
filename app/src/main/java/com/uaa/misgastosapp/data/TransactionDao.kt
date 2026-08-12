@@ -8,6 +8,9 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: TransactionEntity)
 
+    @Update
+    suspend fun update(transaction: TransactionEntity)
+
     @Delete
     suspend fun delete(transaction: TransactionEntity)
 
@@ -15,9 +18,11 @@ interface TransactionDao {
     fun getAll(): Flow<List<TransactionEntity>>
 
     @Query("""
-        SELECT t.id, t.title, t.amount, t.date, t.categoryId, c.name as categoryName
+        SELECT t.id, t.title, t.amount, t.date, t.categoryId, c.name as categoryName,
+               t.accountId, a.name as accountName
         FROM transactions t
         LEFT JOIN categories c ON t.categoryId = c.id
+        LEFT JOIN accounts a ON t.accountId = a.id
         ORDER BY t.id DESC
     """)
     fun getAllWithCategoryName(): Flow<List<TransactionWithCategoryName>>
@@ -26,9 +31,11 @@ interface TransactionDao {
     fun getExpensesForMonth(monthYearPattern: String): Flow<List<TransactionEntity>>
 
     @Query("""
-        SELECT t.id, t.title, t.amount, t.date, t.categoryId, c.name as categoryName
+        SELECT t.id, t.title, t.amount, t.date, t.categoryId, c.name as categoryName,
+               t.accountId, a.name as accountName
         FROM transactions t
         LEFT JOIN categories c ON t.categoryId = c.id
+        LEFT JOIN accounts a ON t.accountId = a.id
         WHERE t.date LIKE :monthYearPattern AND t.amount < 0
         ORDER BY t.amount ASC
     """)

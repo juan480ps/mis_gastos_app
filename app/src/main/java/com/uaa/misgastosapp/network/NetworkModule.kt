@@ -3,6 +3,7 @@
 package com.uaa.misgastosapp.network
 
 import android.util.Log
+import com.uaa.misgastosapp.BuildConfig
 import com.uaa.misgastosapp.utils.SecureSessionManager
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -46,14 +47,8 @@ object NetworkModule {
 
     // esta funcion privada se encarga de construir y configurar la instancia de retrofit.
     private fun createRetrofit() {
-        // se crea un interceptor para registrar en la consola toda la informacion de las llamadas de red. es muy util para depurar.
-        val loggingInterceptor = HttpLoggingInterceptor { message ->
-            Log.d("OkHttp", message)
-        }.apply {
-            level = HttpLoggingInterceptor.Level.BODY // se configura para que muestre el cuerpo de la solicitud y la respuesta.
-        }
-
         // se crea un interceptor para añadir el token de autenticacion a las cabeceras de las solicitudes.
+        // nunca debe loguear el token ni el header Authorization: eso filtraria credenciales por logcat.
         val authInterceptor = Interceptor { chain ->
             val original = chain.request()
             val requestBuilder = original.newBuilder()
@@ -66,21 +61,18 @@ object NetworkModule {
                 sessionManager.getAccessToken()?.let { token ->
                     // si el token no es el de "modo offline", se añade a la cabecera de autorizacion.
                     if (token != "offline_mode") {
-                        Log.d("NetworkModule", "Adding token to request: Bearer $token")
                         requestBuilder.header("Authorization", "Bearer $token")
                     }
-                } ?: Log.d("NetworkModule", "No token available for: $path")
+                }
             }
 
             val request = requestBuilder.build()
-            Log.d("NetworkModule", "Request URL: ${request.url}")
-            Log.d("NetworkModule", "Headers: ${request.headers}")
 
             try {
                 // se envia la solicitud a la red.
                 chain.proceed(request)
             } catch (e: Exception) {
-                // si falla, se registra el error.
+                // si falla, se registra el error (sin datos de la solicitud).
                 Log.e("NetworkModule", "Request failed: ${e.message}")
                 throw e
             }
@@ -89,7 +81,16 @@ object NetworkModule {
         // se construye el cliente http (okhttp) añadiendo los interceptores y configurando los tiempos de espera.
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
-            .addInterceptor(loggingInterceptor)
+            .apply {
+                // el interceptor de body solo se agrega en builds de debug: en release nunca debe
+                // imprimir headers (incluye Authorization) ni bodies (incluye password en login/register).
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(
+                        HttpLoggingInterceptor { message -> Log.d("OkHttp", message) }
+                            .apply { level = HttpLoggingInterceptor.Level.BODY }
+                    )
+                }
+            }
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

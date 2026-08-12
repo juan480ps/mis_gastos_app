@@ -9,12 +9,19 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uaa.misgastosapp.data.*
+import com.uaa.misgastosapp.data.repository.AppRepositories
 import com.uaa.misgastosapp.data.repository.RecurringTransactionRepository
 import com.uaa.misgastosapp.model.RecurringTransaction
+import com.uaa.misgastosapp.utils.Result
+import com.uaa.misgastosapp.utils.capitalizeFirst
+import com.uaa.misgastosapp.worker.RecurringNotificationHelper
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -29,21 +36,25 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
 
     // el bloque 'init' se ejecuta cuando se crea una instancia del viewmodel.
     init {
-        // se obtiene la instancia de la base de datos.
-        val db = AppDatabase.getInstance(application)
-        // se inicializa el repositorio, pasandole los daos necesarios.
-        repository = RecurringTransactionRepository(
-            db.recurringTransactionDao(),
-            db.transactionDao(),
-            db.categoryDao()
-        )
+        repository = AppRepositories.recurringTransactionRepository(application)
     }
+
+    // se crea un 'stateflow' para comunicar el estado de guardar/eliminar, igual que en los demas ViewModels.
+    private val _operationStatus = MutableStateFlow<Result<String>?>(null)
+    val operationStatus: StateFlow<Result<String>?> = _operationStatus.asStateFlow()
+
+    // true hasta la primera emision (o error), para que la UI distinga "cargando" de "sin
+    // recurrentes creadas" (antes se veian igual: lista vacia en ambos casos).
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     // este 'stateflow' expone la lista de todas las transacciones recurrentes desde el repositorio.
     val recurringTransactions: StateFlow<List<RecurringTransaction>> = repository.allRecurringTransactions
+        .onEach { _isLoading.value = false }
         // se añade un bloque 'catch' para atrapar y registrar cualquier error que ocurra en el flujo.
         .catch { e ->
             Log.e("RecurringVM", "Error en el flujo de transacciones recurrentes", e)
+            _isLoading.value = false
             emit(emptyList()) // si hay un error, se emite una lista vacia.
         }
         // se convierte el flujo en un 'stateflow' que se mantiene activo mientras haya observadores.
@@ -51,7 +62,7 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
 
     // esta funcion obtiene una transaccion recurrente especifica por su id.
     // usa un 'callback' para devolver el resultado de forma asincrona.
-    fun getRecurringTransactionById(id: Int, callback: (RecurringTransactionEntity?) -> Unit) {
+    fun getRecurringTransactionById(id: Int, callback: (RecurringTransaction?) -> Unit) {
         viewModelScope.launch {
             try {
                 // se llama al repositorio y el resultado se pasa al callback.
@@ -74,12 +85,11 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
         dayOfMonth: Int,
         startDate: LocalDate,
         endDate: LocalDate?,
-        isActive: Boolean,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
+        isActive: Boolean
     ) {
         // se inicia una corutina.
         viewModelScope.launch {
+            _operationStatus.value = Result.Loading
             try {
                 // se realizan validaciones sobre los datos de entrada.
                 if (title.isBlank()) throw IllegalArgumentException("El título no puede estar vacío.")
@@ -90,7 +100,7 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
                 val formatter = DateTimeFormatter.ISO_LOCAL_DATE
                 val entity = RecurringTransactionEntity(
                     id = id ?: 0, // si el id es nulo, se le asigna 0 para que room lo autogenere.
-                    title = title,
+                    title = title.capitalizeFirst(),
                     amount = amount,
                     categoryId = categoryId,
                     recurrenceType = recurrenceType,
@@ -108,12 +118,11 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
                 } else {
                     repository.update(entity)
                 }
-                // se llama a la funcion de exito.
-                onSuccess()
+                _operationStatus.value = Result.Success("Transacción recurrente guardada")
             } catch (e: Exception) {
-                // si hay un error, se registra y se llama a la funcion de error.
+                // si hay un error, se registra y se actualiza el estado.
                 Log.e("RecurringVM", "Error al guardar transacción recurrente", e)
-                onError(e.message ?: "Error inesperado.")
+                _operationStatus.value = Result.Error(e.message ?: "Error inesperado.")
             }
         }
     }
@@ -121,19 +130,31 @@ class RecurringTransactionViewModel(application: Application) : AndroidViewModel
     // esta funcion elimina una transaccion recurrente.
     fun deleteRecurringTransaction(recurringTransaction: RecurringTransaction) {
         viewModelScope.launch {
+            _operationStatus.value = Result.Loading
             try {
                 repository.delete(recurringTransaction)
+                _operationStatus.value = Result.Success("Transacción recurrente eliminada")
             } catch (e: Exception) {
                 Log.e("RecurringVM", "Error al eliminar transacción recurrente", e)
+                _operationStatus.value = Result.Error(e.message ?: "No se pudo eliminar la transacción recurrente.")
             }
         }
     }
 
+    fun clearOperationStatus() {
+        _operationStatus.value = null
+    }
+
     // esta funcion inicia el proceso de verificar y crear las transacciones vencidas.
+    // si se proceso alguna, se notifica: antes el balance cambiaba en silencio y la fecha de
+    // "proximo vencimiento" no tenia ninguna consecuencia visible para el usuario.
     fun processDueRecurringTransactions() {
         viewModelScope.launch {
             try {
-                repository.processDueRecurringTransactions()
+                val processed = repository.processDueRecurringTransactions()
+                if (processed.isNotEmpty()) {
+                    RecurringNotificationHelper.notifyProcessed(getApplication(), processed)
+                }
             } catch (e: Exception) {
                 Log.e("RecurringVM", "Error al procesar transacciones recurrentes debidas", e)
             }

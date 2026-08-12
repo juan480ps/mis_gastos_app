@@ -1,13 +1,17 @@
 package com.uaa.misgastosapp.ui
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.uaa.misgastosapp.data.PremiumManager
+import com.uaa.misgastosapp.data.repository.AppRepositories
+import com.uaa.misgastosapp.model.Transaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
@@ -39,6 +49,7 @@ fun ExportScreen(
 ) {
     val isPremium by premiumManager.isPremium.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showPremiumDialog by remember { mutableStateOf(false) }
     var exportLoading by remember { mutableStateOf(false) }
     var exportSuccess by remember { mutableStateOf(false) }
@@ -49,7 +60,7 @@ fun ExportScreen(
                 title = { Text("Exportar Datos") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -119,13 +130,14 @@ fun ExportScreen(
                 ExportOptionCard(
                     icon = Icons.Default.PictureAsPdf,
                     title = "Exportar PDF",
-                    description = "Genera un reporte profesional con gráficos y tablas",
+                    description = "Genera un reporte con el listado de tus transacciones",
                     color = Color(0xFFE53935),
                     onClick = {
                         exportLoading = true
-                        exportPdf(context) { success ->
+                        exportSuccess = false
+                        coroutineScope.launch {
+                            exportSuccess = exportPdf(context)
                             exportLoading = false
-                            exportSuccess = success
                         }
                     },
                     enabled = !exportLoading
@@ -141,9 +153,10 @@ fun ExportScreen(
                     color = Color(0xFF43A047),
                     onClick = {
                         exportLoading = true
-                        exportCsv(context) { success ->
+                        exportSuccess = false
+                        coroutineScope.launch {
+                            exportSuccess = exportCsv(context)
                             exportLoading = false
-                            exportSuccess = success
                         }
                     },
                     enabled = !exportLoading
@@ -242,54 +255,108 @@ private fun ExportOptionCard(
     }
 }
 
+// obtiene las transacciones reales desde el repositorio (no simuladas), para los dos formatos de exportacion.
 @RequiresApi(Build.VERSION_CODES.O)
-private fun exportPdf(context: Context, onResult: (Boolean) -> Unit) {
-    try {
-        // TODO: Implementar generación de PDF real con Android PDF generation
-        // Por ahora creamos un archivo de texto simulado
-        val fileName = "MisGastos_Reporte_${LocalDate.now()}.txt"
-        val file = File(context.cacheDir, fileName)
-        file.writeText("Reporte de Mis Gastos\nFecha: ${LocalDate.now()}\n\n[Próximamente: Reporte PDF completo con gráficos]")
+private suspend fun loadTransactionsForExport(context: Context): List<Transaction> {
+    val application = context.applicationContext as Application
+    return AppRepositories.transactionRepository(application).allTransactions.first()
+}
 
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
+private fun shareExportedFile(context: Context, file: File, mimeType: String, chooserTitle: String) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, chooserTitle))
+}
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "text/plain")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+@RequiresApi(Build.VERSION_CODES.O)
+private suspend fun exportPdf(context: Context): Boolean {
+    return try {
+        val transactions = loadTransactionsForExport(context)
+        val file = withContext(Dispatchers.IO) {
+            val pageWidth = 595
+            val pageHeight = 842
+            val margin = 40f
+            val lineHeight = 18f
+
+            val titlePaint = Paint().apply { textSize = 16f; isFakeBoldText = true }
+            val textPaint = Paint().apply { textSize = 11f }
+
+            val pdfDocument = PdfDocument()
+            var pageNumber = 1
+            var page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create())
+            var canvas = page.canvas
+            var y = margin
+
+            canvas.drawText("Reporte de Mis Gastos", margin, y, titlePaint)
+            y += lineHeight * 1.5f
+            canvas.drawText("Generado: ${LocalDate.now()}", margin, y, textPaint)
+            y += lineHeight
+            val total = transactions.sumOf { it.amount }
+            canvas.drawText("Balance total: ${"%,.0f".format(total)}", margin, y, textPaint)
+            y += lineHeight * 2
+
+            for (t in transactions) {
+                if (y > pageHeight - margin) {
+                    pdfDocument.finishPage(page)
+                    pageNumber++
+                    page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create())
+                    canvas = page.canvas
+                    y = margin
+                }
+                canvas.drawText(
+                    "${t.date}  ${t.categoryName ?: "Sin Categoría"}  ${t.title}  ${"%,.0f".format(t.amount)}",
+                    margin, y, textPaint
+                )
+                y += lineHeight
+            }
+            pdfDocument.finishPage(page)
+
+            val fileName = "MisGastos_Reporte_${LocalDate.now()}.pdf"
+            val outFile = File(context.cacheDir, fileName)
+            outFile.outputStream().use { pdfDocument.writeTo(it) }
+            pdfDocument.close()
+            outFile
         }
-        context.startActivity(Intent.createChooser(intent, "Abrir reporte"))
-        onResult(true)
+        shareExportedFile(context, file, "application/pdf", "Abrir reporte")
+        true
     } catch (e: Exception) {
         Toast.makeText(context, "Error al exportar: ${e.message}", Toast.LENGTH_LONG).show()
-        onResult(false)
+        false
+    }
+}
+
+private fun csvEscape(value: String): String {
+    return if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+        "\"" + value.replace("\"", "\"\"") + "\""
+    } else {
+        value
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-private fun exportCsv(context: Context, onResult: (Boolean) -> Unit) {
-    try {
-        val fileName = "MisGastos_Datos_${LocalDate.now()}.csv"
-        val file = File(context.cacheDir, fileName)
-        file.writeText("Fecha,Título,Categoría,Monto\n[Próximamente: Datos exportados desde la base de datos]")
-
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "text/csv")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+private suspend fun exportCsv(context: Context): Boolean {
+    return try {
+        val transactions = loadTransactionsForExport(context)
+        val file = withContext(Dispatchers.IO) {
+            val fileName = "MisGastos_Datos_${LocalDate.now()}.csv"
+            val outFile = File(context.cacheDir, fileName)
+            outFile.bufferedWriter().use { writer ->
+                writer.appendLine("Fecha,Título,Categoría,Monto")
+                for (t in transactions) {
+                    writer.appendLine(
+                        "${t.date},${csvEscape(t.title)},${csvEscape(t.categoryName ?: "Sin Categoría")},${t.amount}"
+                    )
+                }
+            }
+            outFile
         }
-        context.startActivity(Intent.createChooser(intent, "Abrir datos"))
-        onResult(true)
+        shareExportedFile(context, file, "text/csv", "Abrir datos")
+        true
     } catch (e: Exception) {
         Toast.makeText(context, "Error al exportar: ${e.message}", Toast.LENGTH_LONG).show()
-        onResult(false)
+        false
     }
 }

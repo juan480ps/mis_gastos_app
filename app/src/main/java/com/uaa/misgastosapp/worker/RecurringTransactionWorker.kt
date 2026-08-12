@@ -76,9 +76,14 @@ class RecurringTransactionWorker(
                 categoryDao = database.categoryDao()
             )
 
-            repository.processDueRecurringTransactions()
+            val processed = repository.processDueRecurringTransactions()
+            if (processed.isNotEmpty()) {
+                // asi el usuario se entera de que paso algo, en vez de que el balance cambie en
+                // silencio mientras la app estaba cerrada.
+                RecurringNotificationHelper.notifyProcessed(applicationContext, processed)
+            }
 
-            Log.d(TAG, "Transacciones recurrentes procesadas exitosamente")
+            Log.d(TAG, "Transacciones recurrentes procesadas exitosamente (${processed.size})")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Error procesando transacciones recurrentes", e)

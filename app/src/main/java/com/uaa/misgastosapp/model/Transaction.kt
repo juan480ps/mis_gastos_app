@@ -16,5 +16,8 @@ data class Transaction(
     // se guarda el id de la categoria asociada. puede ser nulo.
     val categoryId: Int?,
     // se guarda el nombre de la categoria asociada. puede ser nulo.
-    val categoryName: String?
+    val categoryName: String?,
+    // cuenta/banco asociado, opcional: null significa que la transaccion no esta asignada a ninguna cuenta.
+    val accountId: Int? = null,
+    val accountName: String? = null
 )

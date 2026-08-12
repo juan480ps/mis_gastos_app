@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -51,6 +52,19 @@ fun RegisterScreen(
     // se observa el estado de carga desde el viewmodel.
     val isLoading by authViewModel.isLoading.collectAsState()
     val context = LocalContext.current
+
+    // se muestran errores por campo solo despues del primer intento de envio, para no
+    // molestar al usuario con errores mientras recien empieza a escribir. las mismas reglas
+    // que valida AuthViewModel.register(), pero mostradas junto a cada campo en vez de un solo
+    // Toast generico al final.
+    var attemptedSubmit by remember { mutableStateOf(false) }
+    val nameError = attemptedSubmit && name.isBlank()
+    val emailError = attemptedSubmit &&
+        (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches())
+    val usernameError = attemptedSubmit && username.isBlank()
+    val passwordValid = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}$".toRegex().matches(password)
+    val passwordError = attemptedSubmit && (password.isBlank() || !passwordValid)
+    val confirmPasswordError = attemptedSubmit && confirmPassword != password
 
     // se usa el componente scaffold para la estructura de la pantalla.
     Scaffold(
@@ -88,7 +102,10 @@ fun RegisterScreen(
                 label = { Text("Nombre completo") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isLoading
+                enabled = !isLoading,
+                isError = nameError,
+                supportingText = { if (nameError) Text("El nombre no puede estar vacío") },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -101,7 +118,9 @@ fun RegisterScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isLoading
+                enabled = !isLoading,
+                isError = emailError,
+                supportingText = { if (emailError) Text("Ingresá un email válido") }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -113,7 +132,9 @@ fun RegisterScreen(
                 label = { Text("Nombre de usuario") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isLoading
+                enabled = !isLoading,
+                isError = usernameError,
+                supportingText = { if (usernameError) Text("El nombre de usuario no puede estar vacío") }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -136,6 +157,7 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isLoading,
+                isError = passwordError,
                 // se muestra un texto de ayuda con los requisitos de la contraseña.
                 supportingText = { Text("Mínimo 8 caracteres, una mayúscula, una minúscula y un número") }
             )
@@ -159,7 +181,9 @@ fun RegisterScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isLoading
+                enabled = !isLoading,
+                isError = confirmPasswordError,
+                supportingText = { if (confirmPasswordError) Text("Las contraseñas no coinciden") }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -167,6 +191,11 @@ fun RegisterScreen(
             // boton de registro.
             Button(
                 onClick = {
+                    attemptedSubmit = true
+                    val hasErrors = name.isBlank() || email.isBlank() || username.isBlank() ||
+                        !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() ||
+                        !passwordValid || confirmPassword != password
+                    if (hasErrors) return@Button
                     // se llama al viewmodel para registrar al usuario.
                     authViewModel.register(
                         name = name,

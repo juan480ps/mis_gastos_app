@@ -1,16 +1,25 @@
 package com.uaa.misgastosapp.ui.viewmodel
 
+import android.app.Application
+import app.cash.turbine.test
 import com.uaa.misgastosapp.data.repository.TransactionRepository
 import com.uaa.misgastosapp.model.Transaction
 import com.uaa.misgastosapp.utils.Result
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -18,7 +27,17 @@ import org.junit.Test
 class TransactionViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+    private val application: Application = mockk(relaxed = true)
     private val repository: TransactionRepository = mockk()
+
+    private val sampleTransaction = Transaction(
+        id = 1,
+        title = "Supermercado",
+        amount = -50000.0,
+        date = "2026-08-09",
+        categoryId = 1,
+        categoryName = "Comida"
+    )
 
     @Before
     fun setup() {
@@ -30,40 +49,80 @@ class TransactionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    @Test
-    fun `operationStatus is null initially`() = runTest {
-        // Given - ViewModel would be created here
-        // We test the Result class behavior
-        val status: Result<String>? = null
-        assertNull(status)
+    private fun createViewModel(): TransactionViewModel {
+        every { repository.allTransactions } returns flowOf(listOf(sampleTransaction))
+        return TransactionViewModel(application, repository)
     }
 
     @Test
-    fun `Result Loading state works correctly`() {
-        // Given
-        val loading: Result<String> = Result.Loading
+    fun `transactions expone la lista del repositorio`() = runTest {
+        val viewModel = createViewModel()
 
-        // Then
-        assertTrue(loading is Result.Loading)
+        viewModel.transactions.test {
+            assertEquals(listOf(sampleTransaction), awaitItem())
+        }
     }
 
     @Test
-    fun `Result Success state works correctly`() {
-        // Given
-        val success: Result<String> = Result.Success("Operation completed")
-
-        // Then
-        assertTrue(success is Result.Success)
-        assertEquals("Operation completed", (success as Result.Success).data)
+    fun `operationStatus es null al crear el ViewModel`() {
+        val viewModel = createViewModel()
+        assertNull(viewModel.operationStatus.value)
     }
 
     @Test
-    fun `Result Error state works correctly`() {
-        // Given
-        val error: Result<String> = Result.Error("Something went wrong")
+    fun `addTransaction exitosa termina en Success`() = runTest {
+        val viewModel = createViewModel()
+        coEvery { repository.insertTransaction(any(), any(), any(), any(), any()) } returns Unit
 
-        // Then
-        assertTrue(error is Result.Error)
-        assertEquals("Something went wrong", (error as Result.Error).message)
+        viewModel.addTransaction("Supermercado", -50000.0, "2026-08-09", categoryId = 1)
+
+        coVerify { repository.insertTransaction("Supermercado", -50000.0, "2026-08-09", 1, null) }
+        val status = viewModel.operationStatus.value
+        assertTrue(status is Result.Success)
+    }
+
+    @Test
+    fun `addTransaction fallida termina en Error`() = runTest {
+        val viewModel = createViewModel()
+        coEvery { repository.insertTransaction(any(), any(), any(), any(), any()) } throws RuntimeException("fallo de red")
+
+        viewModel.addTransaction("Supermercado", -50000.0, "2026-08-09", categoryId = 1)
+
+        val status = viewModel.operationStatus.value
+        assertTrue(status is Result.Error)
+        assertTrue((status as Result.Error).message.contains("fallo de red"))
+    }
+
+    @Test
+    fun `deleteTransaction exitosa termina en Success`() = runTest {
+        val viewModel = createViewModel()
+        coEvery { repository.deleteTransaction(any()) } returns Unit
+
+        viewModel.deleteTransaction(1)
+
+        coVerify { repository.deleteTransaction(1) }
+        assertTrue(viewModel.operationStatus.value is Result.Success)
+    }
+
+    @Test
+    fun `deleteTransaction fallida termina en Error`() = runTest {
+        val viewModel = createViewModel()
+        coEvery { repository.deleteTransaction(any()) } throws NoSuchElementException("no existe")
+
+        viewModel.deleteTransaction(999)
+
+        assertTrue(viewModel.operationStatus.value is Result.Error)
+    }
+
+    @Test
+    fun `clearOperationStatus vuelve a null`() = runTest {
+        val viewModel = createViewModel()
+        coEvery { repository.deleteTransaction(any()) } returns Unit
+        viewModel.deleteTransaction(1)
+        assertTrue(viewModel.operationStatus.value is Result.Success)
+
+        viewModel.clearOperationStatus()
+
+        assertNull(viewModel.operationStatus.value)
     }
 }

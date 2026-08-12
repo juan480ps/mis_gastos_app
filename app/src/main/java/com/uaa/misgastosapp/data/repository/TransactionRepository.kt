@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import com.uaa.misgastosapp.data.TransactionDao
 import com.uaa.misgastosapp.data.TransactionEntity
+import com.uaa.misgastosapp.data.TransactionWithCategoryName
 import com.uaa.misgastosapp.model.Transaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -29,20 +30,42 @@ class TransactionRepository(
                     amount = entity.amount,
                     date = entity.date,
                     categoryId = entity.categoryId,
-                    categoryName = entity.categoryName ?: "Sin Categoría"
+                    categoryName = entity.categoryName ?: "Sin Categoría",
+                    accountId = entity.accountId,
+                    accountName = entity.accountName
                 )
             }
         }
 
+    // gastos de un mes (patron "yyyy-MM%") con el nombre de categoria, para los graficos.
+    fun getExpensesWithCategoryName(monthYearPattern: String): Flow<List<TransactionWithCategoryName>> =
+        transactionDao.getExpensesWithCategoryName(monthYearPattern)
+
     // esta es una funcion suspendida para insertar una nueva transaccion.
-    suspend fun insertTransaction(title: String, amount: Double, date: String, categoryId: Int?) {
+    // accountId es opcional: asociar una cuenta/banco nunca es obligatorio.
+    suspend fun insertTransaction(title: String, amount: Double, date: String, categoryId: Int?, accountId: Int? = null) {
         val transaction = TransactionEntity(
             title = title,
             amount = amount,
             date = date,
-            categoryId = categoryId
+            categoryId = categoryId,
+            accountId = accountId
         )
         transactionDao.insert(transaction)
+    }
+
+    // esta es una funcion suspendida para actualizar una transaccion existente.
+    suspend fun updateTransaction(id: Int, title: String, amount: Double, date: String, categoryId: Int?, accountId: Int?) {
+        transactionDao.update(
+            TransactionEntity(
+                id = id,
+                title = title,
+                amount = amount,
+                date = date,
+                categoryId = categoryId,
+                accountId = accountId
+            )
+        )
     }
 
     // esta es una funcion suspendida para borrar una transaccion usando su id.

@@ -13,12 +13,18 @@ object PremiumLimits {
     const val FREE_MAX_RECURRING_TRANSACTIONS = 5
     const val FREE_MAX_BUDGETS = 3
     const val FREE_HISTORY_MONTHS = 3
+    const val FREE_MAX_ACCOUNTS = 3
+    // presupuestos marcados "todos los meses": limite aparte del de presupuestos por mes
+    // (FREE_MAX_BUDGETS), ya que uno recurrente vale por todos los meses futuros.
+    const val FREE_MAX_RECURRING_BUDGETS = 2
 
     // Límites PREMIUM (sin límite = -1)
     const val PREMIUM_MAX_CATEGORIES = -1
     const val PREMIUM_MAX_RECURRING_TRANSACTIONS = -1
     const val PREMIUM_MAX_BUDGETS = -1
     const val PREMIUM_HISTORY_MONTHS = -1
+    const val PREMIUM_MAX_ACCOUNTS = -1
+    const val PREMIUM_MAX_RECURRING_BUDGETS = -1
 
     /**
      * Verifica si el usuario puede agregar una categoría.
@@ -46,6 +52,33 @@ object PremiumLimits {
         val isPremium = PremiumManager.getInstance(context).isPremium.value
         if (isPremium) return true
         return currentCount < FREE_MAX_BUDGETS
+    }
+
+    /**
+     * Verifica si el usuario puede agregar una cuenta/banco.
+     */
+    fun canAddAccount(context: Context, currentCount: Int): Boolean {
+        val isPremium = PremiumManager.getInstance(context).isPremium.value
+        if (isPremium) return true
+        return currentCount < FREE_MAX_ACCOUNTS
+    }
+
+    /**
+     * Verifica si el usuario puede agregar un presupuesto "todos los meses" (recurrente).
+     * Limite independiente del de presupuestos por mes especifico.
+     */
+    fun canAddRecurringBudget(context: Context, currentCount: Int): Boolean {
+        val isPremium = PremiumManager.getInstance(context).isPremium.value
+        if (isPremium) return true
+        return currentCount < FREE_MAX_RECURRING_BUDGETS
+    }
+
+    /**
+     * Obtiene el límite de cuentas/bancos para el usuario.
+     */
+    fun getAccountsLimit(context: Context): Int {
+        val isPremium = PremiumManager.getInstance(context).isPremium.value
+        return if (isPremium) PREMIUM_MAX_ACCOUNTS else FREE_MAX_ACCOUNTS
     }
 
     /**

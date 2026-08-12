@@ -3,6 +3,7 @@ package com.uaa.misgastosapp.utils
 import android.content.Context
 import android.util.Log
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.ClearCredentialException
@@ -22,9 +23,8 @@ class GoogleSignInHelper(private val context: Context) {
 
     companion object {
         private const val TAG = "GoogleSignInHelper"
-        // TODO: Reemplazar con tu Web Client ID de Google Cloud Console
-        // https://console.cloud.google.com/apis/credentials
-        const val WEB_CLIENT_ID = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+        // Web Client ID de Google Cloud Console (proyecto Mis Gastos, cliente OAuth "Mis Gastos Web").
+        const val WEB_CLIENT_ID = "844701924658-1c7vds68hlvunakquu12h9ncuhac03pn.apps.googleusercontent.com"
     }
 
     // Estado del proceso de Google Sign-In
@@ -84,23 +84,25 @@ class GoogleSignInHelper(private val context: Context) {
         onSuccess: (GoogleIdTokenCredential) -> Unit,
         onError: (String) -> Unit
     ) {
-        try {
-            when (val credential = result.credential) {
-                is GoogleIdTokenCredential -> {
-                    Log.d(TAG, "Google Sign-In exitoso: ${credential.id}")
-                    _signInState.value = GoogleSignInState.Success(credential)
-                    onSuccess(credential)
-                }
-                else -> {
-                    Log.e(TAG, "Tipo de credencial inesperado: ${credential.type}")
-                    _signInState.value = GoogleSignInState.Error("Tipo de credencial no soportado")
-                    onError("Tipo de credencial no soportado")
-                }
+        // Credential Manager nunca entrega un GoogleIdTokenCredential directamente: siempre viene
+        // envuelto en un CustomCredential generico que hay que reconocer por su "type" y convertir
+        // explicitamente con GoogleIdTokenCredential.createFrom(...).
+        val credential = result.credential
+        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            try {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                Log.d(TAG, "Google Sign-In exitoso: ${googleIdTokenCredential.id}")
+                _signInState.value = GoogleSignInState.Success(googleIdTokenCredential)
+                onSuccess(googleIdTokenCredential)
+            } catch (e: GoogleIdTokenParsingException) {
+                Log.e(TAG, "Error al parsear Google ID Token", e)
+                _signInState.value = GoogleSignInState.Error("Error al procesar token de Google")
+                onError("Error al procesar token de Google")
             }
-        } catch (e: GoogleIdTokenParsingException) {
-            Log.e(TAG, "Error al parsear Google ID Token", e)
-            _signInState.value = GoogleSignInState.Error("Error al procesar token de Google")
-            onError("Error al procesar token de Google")
+        } else {
+            Log.e(TAG, "Tipo de credencial inesperado: ${credential.type}")
+            _signInState.value = GoogleSignInState.Error("Tipo de credencial no soportado")
+            onError("Tipo de credencial no soportado")
         }
     }
 

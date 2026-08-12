@@ -1,8 +1,22 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+// Credenciales de firma: se leen de local.properties (no versionado) o variables de entorno
+// (para CI), nunca hardcodeadas en este archivo. Si no estan definidas, el build de release
+// queda sin firmar como hasta ahora, y se firma manualmente o via Play App Signing.
+val localProperties = Properties().apply {
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        load(FileInputStream(localPropsFile))
+    }
+}
+fun signingProp(key: String): String? = localProperties.getProperty(key) ?: System.getenv(key)
 
 android {
     namespace = "com.uaa.misgastosapp"
@@ -12,10 +26,22 @@ android {
         applicationId = "com.uaa.gastos"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePath = signingProp("MIS_GASTOS_KEYSTORE_PATH")
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = signingProp("MIS_GASTOS_KEYSTORE_PASSWORD")
+                keyAlias = signingProp("MIS_GASTOS_KEY_ALIAS")
+                keyPassword = signingProp("MIS_GASTOS_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -26,6 +52,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (signingProp("MIS_GASTOS_KEYSTORE_PATH") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         getByName("debug") {
             isMinifyEnabled = false
@@ -37,6 +66,15 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            // sin esto, cualquier llamada a un metodo de android.jar (Log.d/Log.e, etc.) en un
+            // test unitario puro (sin Robolectric) lanza "Method ... not mocked".
+            isReturnDefaultValues = true
+        }
     }
 }
 
@@ -64,6 +102,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.7.1")
     ksp("androidx.room:room-compiler:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
+
+    // SQLCipher: cifra el archivo de la base de datos Room en disco (datos financieros en reposo).
+    implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
+    implementation("androidx.sqlite:sqlite:2.6.2")
 
     // Networking (Retrofit + OkHttp)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

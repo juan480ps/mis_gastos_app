@@ -12,6 +12,11 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
+// una transaccion recurrente que se acaba de procesar (convertir en una transaccion real), para
+// poder avisarle al usuario por notificacion que sucedio, en vez de que cambie el balance en
+// silencio sin ninguna señal visible.
+data class ProcessedRecurringTransaction(val title: String, val amount: Double)
+
 // se asegura que este codigo solo se ejecute en versiones de android compatibles.
 @RequiresApi(Build.VERSION_CODES.O)
 // esta clase es la encargada de manejar toda la logica relacionada con las transacciones recurrentes.
@@ -24,31 +29,30 @@ class RecurringTransactionRepository(
     // aca se define una variable que contiene una lista de todas las transacciones recurrentes.
     // esta lista se actualiza automaticamente gracias al uso de 'flow'.
     val allRecurringTransactions: Flow<List<RecurringTransaction>> = recurringDao.getAll()
-        .map { entities -> // se usa el operador 'map' para transformar la lista de entidades de la base de datos.
-            // se recorre cada entidad para convertirla a un objeto del modelo de la aplicacion ('recurringtransaction').
-            entities.map { entity ->
-                // se obtiene el nombre de la categoria usando su id.
-                val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it) }
-                // se crea un objeto del modelo con los datos de la entidad y el nombre de la categoria.
-                RecurringTransaction(
-                    id = entity.id,
-                    title = entity.title,
-                    amount = entity.amount,
-                    categoryId = entity.categoryId,
-                    // si no se encontro un nombre de categoria, se le asigna "sin categoria".
-                    categoryName = categoryName ?: "Sin Categoría",
-                    recurrenceType = entity.recurrenceType,
-                    dayOfMonth = entity.dayOfMonth,
-                    startDate = entity.startDate,
-                    endDate = entity.endDate,
-                    nextDueDate = entity.nextDueDate,
-                    isActive = entity.isActive
-                )
-            }
-        }
+        .map { entities -> entities.map { entity -> toModel(entity) } }
 
-    // esta funcion busca una transaccion recurrente por su id, llamando directamente al dao.
-    suspend fun getById(id: Int): RecurringTransactionEntity? = recurringDao.getById(id)
+    // esta funcion busca una transaccion recurrente por su id y devuelve el modelo de dominio
+    // (no la entidad de Room), para no filtrar el detalle de persistencia hacia el ViewModel/UI.
+    suspend fun getById(id: Int): RecurringTransaction? = recurringDao.getById(id)?.let { toModel(it) }
+
+    // convierte la entidad de Room al modelo de dominio, resolviendo el nombre de categoria.
+    private suspend fun toModel(entity: RecurringTransactionEntity): RecurringTransaction {
+        val categoryName = entity.categoryId?.let { categoryDao.getCategoryNameById(it) }
+        return RecurringTransaction(
+            id = entity.id,
+            title = entity.title,
+            amount = entity.amount,
+            categoryId = entity.categoryId,
+            // si no se encontro un nombre de categoria, se le asigna "sin categoria".
+            categoryName = categoryName ?: "Sin Categoría",
+            recurrenceType = entity.recurrenceType,
+            dayOfMonth = entity.dayOfMonth,
+            startDate = entity.startDate,
+            endDate = entity.endDate,
+            nextDueDate = entity.nextDueDate,
+            isActive = entity.isActive
+        )
+    }
 
     // esta funcion inserta una nueva transaccion recurrente.
     suspend fun insert(entity: RecurringTransactionEntity) = recurringDao.insert(entity)
@@ -64,12 +68,14 @@ class RecurringTransactionRepository(
     }
 
     // esta es la funcion principal que procesa las transacciones recurrentes que ya vencieron.
-    suspend fun processDueRecurringTransactions() {
+    // devuelve las que realmente se procesaron, para poder avisarle al usuario por notificacion.
+    suspend fun processDueRecurringTransactions(): List<ProcessedRecurringTransaction> {
         // se obtiene la fecha actual.
         val today = LocalDate.now()
         val formatter = DateTimeFormatter.ISO_LOCAL_DATE
         // se piden al dao todas las transacciones recurrentes vencidas a fecha de hoy.
         val dueItems = recurringDao.getDueRecurringTransactions(today.format(formatter))
+        val processed = mutableListOf<ProcessedRecurringTransaction>()
 
         // se recorre cada una de las transacciones vencidas.
         for (item in dueItems) {
@@ -92,6 +98,7 @@ class RecurringTransactionRepository(
                     categoryId = item.categoryId
                 )
             )
+            processed.add(ProcessedRecurringTransaction(item.title, -item.amount))
 
             // se calcula cual sera la proxima fecha de vencimiento para esta transaccion recurrente.
             val newNextDueDate = calculateNextDueDate(
@@ -111,6 +118,7 @@ class RecurringTransactionRepository(
             // se actualiza la transaccion recurrente en la base de datos con los nuevos datos.
             recurringDao.update(updatedItem)
         }
+        return processed
     }
 
     // esta funcion privada se encarga de llamar al metodo de calculo correcto segun el tipo de recurrencia.

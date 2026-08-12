@@ -76,6 +76,40 @@ object Migrations {
     }
 
     /**
+     * Migration from version 5 to 6:
+     * Added accounts table (cuentas/bancos opcionales) y la columna accountId en transactions,
+     * para poder separar los gastos por banco sin que sea obligatorio (accountId es nullable).
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    bankName TEXT,
+                    colorHex TEXT NOT NULL
+                )
+            """)
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_accounts_name ON accounts(name)")
+            db.execSQL(
+                "ALTER TABLE transactions ADD COLUMN accountId INTEGER REFERENCES accounts(id) ON DELETE SET NULL"
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_accountId ON transactions(accountId)")
+        }
+    }
+
+    /**
+     * Migration from version 6 to 7:
+     * Añade la columna isRecurring en budgets, para presupuestos que aplican a todos los meses
+     * en vez de tener que configurarse mes a mes.
+     */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE budgets ADD COLUMN isRecurring INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      * Add new migrations to this list when upgrading the database version.
      */
@@ -83,6 +117,8 @@ object Migrations {
         MIGRATION_1_2,
         MIGRATION_2_3,
         MIGRATION_3_4,
-        MIGRATION_4_5
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7
     )
 }

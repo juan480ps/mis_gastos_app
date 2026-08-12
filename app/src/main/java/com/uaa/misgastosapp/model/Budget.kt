@@ -15,6 +15,9 @@ data class Budget(
     val monthYear: String,
     // se guarda el monto total asignado para este presupuesto.
     val amount: Double,
+    // true = este presupuesto aplica a todos los meses (no hace falta configurarlo cada mes);
+    // false = solo aplica al mes especifico indicado en 'monthYear'.
+    val isRecurring: Boolean = false,
     // se guarda el monto que se ha gastado hasta ahora en esta categoria y mes. su valor por defecto es 0.
     val spentAmount: Double = 0.0,
     // se calcula y guarda el monto que queda disponible. es una resta simple entre el monto total y lo gastado.

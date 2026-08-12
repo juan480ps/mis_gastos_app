@@ -7,8 +7,9 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.uaa.misgastosapp.data.AppDatabase
+import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.data.TransactionWithCategoryName
+import com.uaa.misgastosapp.data.repository.AppRepositories
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import java.time.YearMonth
@@ -22,7 +23,7 @@ data class PieChartData(
 
 @RequiresApi(Build.VERSION_CODES.O)
 class ChartsViewModel(application: Application) : AndroidViewModel(application) {
-    private val transactionDao = AppDatabase.getInstance(application).transactionDao()
+    private val transactionRepository = AppRepositories.transactionRepository(application)
 
     private val _currentMonthYear = MutableStateFlow(YearMonth.now())
     val currentMonthYear: StateFlow<YearMonth> = _currentMonthYear.asStateFlow()
@@ -31,15 +32,36 @@ class ChartsViewModel(application: Application) : AndroidViewModel(application) 
         .map { it.format(DateTimeFormatter.ofPattern("yyyy-MM")) }
         .distinctUntilChanged()
 
+    // filtrar los graficos por cuenta es una funcion Premium; en el plan Free se ignora este
+    // filtro y siempre se muestran los datos combinados de todas las cuentas.
+    private val _accountFilterId = MutableStateFlow<Int?>(null)
+    val accountFilterId: StateFlow<Int?> = _accountFilterId.asStateFlow()
+
     fun setCurrentMonthYear(yearMonth: YearMonth) {
         _currentMonthYear.value = yearMonth
     }
 
+    fun setAccountFilter(accountId: Int?) {
+        _accountFilterId.value = accountId
+    }
+
+    // se vuelve a chequear isPremium aca (no solo en la UI) para que el filtro por cuenta jamas
+    // se aplique si el usuario deja de ser Premium mientras esta pantalla sigue abierta.
+    private val isPremium = PremiumManager.getInstance(application).isPremium
+
     @OptIn(ExperimentalCoroutinesApi::class)
-    val processedExpensePieData: StateFlow<List<PieChartData>> = currentMonthYearString
-        .flatMapLatest { monthStr ->
-            transactionDao.getExpensesWithCategoryName("$monthStr%")
-                .map { expenses: List<TransactionWithCategoryName> ->
+    val processedExpensePieData: StateFlow<List<PieChartData>> = combine(
+        currentMonthYearString, _accountFilterId, isPremium
+    ) { monthStr, accountId, premium -> Triple(monthStr, accountId, premium) }
+        .distinctUntilChanged()
+        .flatMapLatest { (monthStr, accountId, premium) ->
+            transactionRepository.getExpensesWithCategoryName("$monthStr%")
+                .map { allExpenses: List<TransactionWithCategoryName> ->
+                    val expenses = if (premium && accountId != null) {
+                        allExpenses.filter { it.accountId == accountId }
+                    } else {
+                        allExpenses
+                    }
                     if (expenses.isEmpty()) return@map emptyList<PieChartData>()
 
                     val expensesByCategory: Map<Int?, Double> = expenses

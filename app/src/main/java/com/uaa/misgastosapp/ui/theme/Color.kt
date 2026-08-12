@@ -17,3 +17,7 @@ val MoneyGreen = Color(0xFF2E7D32)
 val MoneyGreenLight = Color(0xFF4CAF50)
 val ExpenseRed = Color(0xFFD32F2F)
 val IncomeBlue = Color(0xFF1976D2)
+
+// Color por defecto de la app (plan Free, sin tema elegido): azul moderno, no el
+// morado/rosado de la plantilla de Android Studio ni el color dinamico del wallpaper.
+val ModernBlue = Color(0xFF2563EB)

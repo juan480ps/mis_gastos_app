@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.material3.MenuAnchorType
@@ -21,15 +22,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.uaa.misgastosapp.Routes
+import com.uaa.misgastosapp.data.PremiumLimits
 import com.uaa.misgastosapp.data.RecurrenceType
 import com.uaa.misgastosapp.model.Category
+import com.uaa.misgastosapp.ui.components.ThousandsSeparatorVisualTransformation
 import com.uaa.misgastosapp.ui.viewmodel.CategoryViewModel
 import com.uaa.misgastosapp.ui.viewmodel.RecurringTransactionViewModel
-import java.text.DecimalFormat
+import com.uaa.misgastosapp.utils.Result
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -50,11 +55,12 @@ fun AddEditRecurringTransactionScreen(
     // se obtienen instancias y se declaran los estados para los campos del formulario.
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
-    var rawAmount by remember { mutableStateOf("") } // monto sin formato.
-    var formattedAmount by remember { mutableStateOf("") } // monto con formato de miles.
+    // solo digitos; el separador de miles se agrega al mostrarlo via ThousandsSeparatorVisualTransformation.
+    var rawAmount by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<Category?>(null) }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
     val categories by categoryViewModel.categories.collectAsState()
+    val recurringTransactions by recurringViewModel.recurringTransactions.collectAsState()
     var recurrenceType by remember { mutableStateOf(RecurrenceType.MONTHLY) }
     var dayOfMonth by remember { mutableStateOf(LocalDate.now().dayOfMonth.toString()) }
     var startDate by remember { mutableStateOf(LocalDate.now()) }
@@ -63,7 +69,37 @@ fun AddEditRecurringTransactionScreen(
     var screenTitle by remember { mutableStateOf("Añadir Recurrente") }
     // se configuran los formatos para fechas y numeros.
     val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale("es", "ES"))
-    val decimalFormat = DecimalFormat("#,###")
+    val operationStatus by recurringViewModel.operationStatus.collectAsState()
+
+    // al volver de "+ Añadir nueva categoría...", la que se acaba de crear queda seleccionada
+    // automaticamente, igual que en Agregar Transacción.
+    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+    val newCategoryId = savedStateHandle?.getStateFlow<Int?>("newCategoryId", null)?.collectAsState()
+    LaunchedEffect(newCategoryId?.value, categories) {
+        newCategoryId?.value?.let { id ->
+            categories.find { it.id == id }?.let { found ->
+                selectedCategory = found
+                savedStateHandle?.remove<Int?>("newCategoryId")
+            }
+        }
+    }
+
+    // se observa el resultado de guardar: exito muestra el toast y vuelve atras, error solo avisa.
+    LaunchedEffect(operationStatus) {
+        when (val status = operationStatus) {
+            is Result.Success -> {
+                Toast.makeText(context, status.data, Toast.LENGTH_SHORT).show()
+                recurringViewModel.clearOperationStatus()
+                navController.popBackStack()
+            }
+            is Result.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_LONG).show()
+                recurringViewModel.clearOperationStatus()
+            }
+            is Result.Loading -> {}
+            null -> {}
+        }
+    }
 
     // este efecto se ejecuta solo cuando 'recurringtransactionid' cambia.
     // se usa para cargar los datos de una transaccion existente cuando se entra en modo de edicion.
@@ -75,7 +111,6 @@ fun AddEditRecurringTransactionScreen(
                     // se llenan los estados del formulario con los datos de la entidad cargada.
                     title = it.title
                     rawAmount = it.amount.toString().replace(".0", "")
-                    formattedAmount = decimalFormat.format(rawAmount.toDouble())
                     it.categoryId?.let { catId -> selectedCategory = categories.find { c -> c.id == catId } }
                     recurrenceType = it.recurrenceType
                     dayOfMonth = it.dayOfMonth.toString()
@@ -84,20 +119,6 @@ fun AddEditRecurringTransactionScreen(
                     isActive = it.isActive
                 }
             }
-        }
-    }
-
-    // esta funcion se encarga de actualizar el monto formateado cada vez que el usuario escribe.
-    fun updateFormattedAmount(newValue: String) {
-        rawAmount = newValue.filter { it.isDigit() }
-        formattedAmount = if (rawAmount.isNotEmpty()) {
-            try {
-                decimalFormat.format(rawAmount.toDouble())
-            } catch (e: NumberFormatException) {
-                ""
-            }
-        } else {
-            ""
         }
     }
 
@@ -134,16 +155,19 @@ fun AddEditRecurringTransactionScreen(
                 onValueChange = { title = it },
                 label = { Text("Título") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
-            // campo de texto para el monto.
+            // campo de texto para el monto: el texto real son solo digitos, el separador de
+            // miles es puramente visual para que el cursor no salte mientras se escribe.
             OutlinedTextField(
-                value = formattedAmount,
-                onValueChange = { updateFormattedAmount(it) },
+                value = rawAmount,
+                onValueChange = { input -> rawAmount = input.filter { it.isDigit() } },
                 label = { Text("Monto (PYG)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                visualTransformation = ThousandsSeparatorVisualTransformation()
             )
             // menu desplegable para seleccionar la categoria.
             ExposedDropdownMenuBox(
@@ -172,6 +196,24 @@ fun AddEditRecurringTransactionScreen(
                             categoryDropdownExpanded = false
                         })
                     }
+                    // opcion para navegar a la pantalla de añadir nueva categoria, igual que en
+                    // Agregar Transacción. se avisa el limite del plan Free antes de abrir el
+                    // formulario, no despues de llenarlo.
+                    DropdownMenuItem(
+                        text = { Text("+ Añadir nueva categoría...", color = MaterialTheme.colorScheme.primary) },
+                        onClick = {
+                            categoryDropdownExpanded = false
+                            if (!PremiumLimits.canAddCategory(context, categories.size)) {
+                                Toast.makeText(
+                                    context,
+                                    "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_CATEGORIES} categorías del plan Free. Pasate a Premium para categorías ilimitadas.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                navController.navigate(Routes.ADD_CATEGORY)
+                            }
+                        }
+                    )
                 }
             }
             // texto informativo sobre el tipo de recurrencia.
@@ -215,7 +257,19 @@ fun AddEditRecurringTransactionScreen(
                         Toast.makeText(context, "Monto o día del mes inválido.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    // se llama al viewmodel para guardar o actualizar la transaccion.
+                    // el limite de recurrentes del plan Free solo aplica al crear una nueva, no al editar.
+                    if (recurringTransactionId == null &&
+                        !PremiumLimits.canAddRecurringTransaction(context, recurringTransactions.size)
+                    ) {
+                        Toast.makeText(
+                            context,
+                            "Alcanzaste el límite de ${PremiumLimits.FREE_MAX_RECURRING_TRANSACTIONS} recurrentes del plan Free. Pasate a Premium para recurrentes ilimitadas.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@Button
+                    }
+                    // se llama al viewmodel para guardar o actualizar la transaccion; el resultado
+                    // se maneja en el LaunchedEffect que observa operationStatus.
                     recurringViewModel.addOrUpdateRecurringTransaction(
                         id = recurringTransactionId,
                         title = title,
@@ -225,14 +279,7 @@ fun AddEditRecurringTransactionScreen(
                         dayOfMonth = finalDayOfMonth,
                         startDate = startDate,
                         endDate = endDate,
-                        isActive = isActive,
-                        onSuccess = {
-                            Toast.makeText(context, "Guardado correctamente.", Toast.LENGTH_SHORT).show()
-                            navController.popBackStack()
-                        },
-                        onError = { errorMsg ->
-                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                        }
+                        isActive = isActive
                     )
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -286,8 +333,7 @@ fun DatePickerField(
                         onClearDate()
                         datePickerDialog.dismiss()
                     }) {
-                        // aca hay un pequeño error en el icono, deberia ser uno de 'limpiar'.
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Limpiar fecha")
+                        Icon(Icons.Filled.Clear, "Limpiar fecha")
                     }
                 }
                 // el icono principal para abrir el selector de fecha.

@@ -9,7 +9,7 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
-import com.uaa.misgastosapp.data.AppDatabase
+import com.uaa.misgastosapp.data.repository.AppRepositories
 import com.uaa.misgastosapp.data.repository.AuthRepository
 import com.uaa.misgastosapp.network.NetworkModule
 import com.uaa.misgastosapp.model.ErrorResponse
@@ -36,13 +36,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     // el bloque 'init' se ejecuta cuando se crea una instancia de este viewmodel.
     init {
-        // se obtiene la instancia de la base de datos.
-        val db = AppDatabase.getInstance(application)
-        // se inicializa el repositorio de autenticacion, pasandole el dao de usuario y el gestor de sesiones.
-        authRepository = AuthRepository(
-            userDao = db.userDao(),
-            sessionManager = this.sessionManager
-        )
+        authRepository = AppRepositories.authRepository(application, sessionManager)
     }
 
     // se crea un 'stateflow' para saber si el usuario ha iniciado sesion. es privado para que solo el viewmodel lo pueda modificar.

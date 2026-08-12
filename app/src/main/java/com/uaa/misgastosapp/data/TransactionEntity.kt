@@ -11,7 +11,7 @@ import androidx.room.PrimaryKey
 @Entity(
     // aca se le da el nombre "transactions" a la tabla.
     tableName = "transactions",
-    indices = [Index(value = ["categoryId"])],
+    indices = [Index(value = ["categoryId"]), Index(value = ["accountId"])],
     // se definen las llaves foraneas, que son relaciones con otras tablas.
     foreignKeys = [
         ForeignKey(
@@ -22,6 +22,15 @@ import androidx.room.PrimaryKey
             // la columna "categoryid" de esta tabla es la columna hija.
             childColumns = ["categoryId"],
             // si se borra una categoria, el campo 'categoryid' en las transacciones asociadas se pondra como nulo. la transaccion no se borrara.
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            // asociar una cuenta/banco a la transaccion es opcional: sirve para separar los
+            // gastos por banco en vez de tener todo en una sola bolsa, sin ser obligatorio.
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["accountId"],
+            // si se borra la cuenta, la transaccion no se borra: solo queda sin cuenta asignada.
             onDelete = ForeignKey.SET_NULL
         )
     ]
@@ -37,16 +46,20 @@ data class TransactionEntity(
     // esta columna guarda la fecha de la transaccion como texto.
     val date: String,
     // esta columna guarda el id de la categoria asociada. el signo de interrogacion indica que puede no tener una categoria (ser nulo).
-    val categoryId: Int? = null
+    val categoryId: Int? = null,
+    // cuenta/banco asociado, opcional: null significa que la transaccion queda en la "bolsa general".
+    val accountId: Int? = null
 )
 
-// data class para el resultado del JOIN entre transacciones y categorias.
-// permite obtener el nombre de la categoria en una sola query, evitando N+1 queries.
+// data class para el resultado del JOIN entre transacciones, categorias y cuentas.
+// permite obtener el nombre de la categoria/cuenta en una sola query, evitando N+1 queries.
 data class TransactionWithCategoryName(
     val id: Int,
     val title: String,
     val amount: Double,
     val date: String,
     val categoryId: Int?,
-    val categoryName: String?
+    val categoryName: String?,
+    val accountId: Int? = null,
+    val accountName: String? = null
 )
