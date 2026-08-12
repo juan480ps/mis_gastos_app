@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,8 +14,6 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
-import com.uaa.misgastosapp.network.NetworkModule
-import com.uaa.misgastosapp.utils.SecureSessionManager
 import com.uaa.misgastosapp.ui.theme.GastosTheme
 import com.uaa.misgastosapp.ui.viewmodel.RecurringTransactionViewModel
 import kotlinx.coroutines.launch
@@ -39,14 +38,15 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        // Es una app financiera: bloquea capturas/grabacion de pantalla y evita que saldos y
+        // movimientos queden visibles en la miniatura de "apps recientes" del sistema.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-
-        val sessionManager = SecureSessionManager(this)
-        NetworkModule.initialize(sessionManager)
 
         // Procesar transacciones recurrentes al abrir la app
         lifecycleScope.launch {

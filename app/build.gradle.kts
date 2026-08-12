@@ -18,6 +18,12 @@ val localProperties = Properties().apply {
 }
 fun signingProp(key: String): String? = localProperties.getProperty(key) ?: System.getenv(key)
 
+// Config de release (IDs de AdMob, clave de licencia de Billing): se lee de local.properties o
+// variables de entorno (para CI), con los valores de desarrollo/test actuales como default. Asi
+// el build sigue funcionando igual que antes sin tocar nada, pero para publicar alcanza con pegar
+// los valores reales en local.properties en vez de editar este archivo.
+fun stringProp(key: String, default: String): String = localProperties.getProperty(key) ?: System.getenv(key) ?: default
+
 android {
     namespace = "com.uaa.misgastosapp"
     compileSdk = 35
@@ -30,6 +36,14 @@ android {
         versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "ADMOB_APP_ID", "\"${stringProp("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")}\"")
+        buildConfigField("String", "ADMOB_BANNER_AD_UNIT_ID", "\"${stringProp("ADMOB_BANNER_AD_UNIT_ID", "ca-app-pub-3940256099942544/6300978111")}\"")
+        // Clave publica de licencia (Base64) de Play Console > Monetization setup > Licensing.
+        // Vacia por defecto: sin ella, PremiumManager rechaza toda compra por seguridad (fail-closed).
+        buildConfigField("String", "LICENSE_PUBLIC_KEY_BASE64", "\"${stringProp("LICENSE_PUBLIC_KEY_BASE64", "")}\"")
+
+        manifestPlaceholders["adMobAppId"] = stringProp("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
     }
 
     signingConfigs {
@@ -106,12 +120,6 @@ dependencies {
     // SQLCipher: cifra el archivo de la base de datos Room en disco (datos financieros en reposo).
     implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
     implementation("androidx.sqlite:sqlite:2.6.2")
-
-    // Networking (Retrofit + OkHttp)
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

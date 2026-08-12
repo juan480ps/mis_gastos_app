@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- La app es 100% local (sin backend propio): el unico trafico de red que genera es el de
+     AdMob, Google Play Billing y Google Sign-In, todo por HTTPS. Sin excepciones de cleartext. -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">10.0.2.2</domain>
-<!--        <domain includeSubdomains="true">localhost</domain>-->
-    </domain-config>
-    
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />

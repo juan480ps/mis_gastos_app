@@ -46,6 +46,6 @@ object AppRepositories {
     // pasa en vez de crear uno nuevo (habria dos instancias distintas del mismo EncryptedSharedPreferences).
     fun authRepository(application: Application, sessionManager: SecureSessionManager): AuthRepository {
         val db = AppDatabase.getInstance(application)
-        return AuthRepository(userDao = db.userDao(), sessionManager = sessionManager)
+        return AuthRepository(userDao = db.userDao(), sessionManager = sessionManager, appDatabase = db)
     }
 }

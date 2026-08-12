@@ -13,11 +13,6 @@ interface UserDao {
     // es una funcion suspendida que inserta un nuevo usuario. devuelve el id de la fila creada.
     suspend fun insert(user: UserEntity): Long
 
-    // aca se define una consulta para verificar las credenciales de un usuario.
-    @Query("SELECT * FROM users WHERE email = :email AND password = :password LIMIT 1")
-    // es una funcion suspendida para el inicio de sesion. devuelve el usuario si el email y la contraseña son correctos, o nulo si no lo son.
-    suspend fun login(email: String, password: String): UserEntity?
-
     // aca se define una consulta para buscar un usuario por su correo electronico.
     @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
     // es una funcion suspendida que devuelve un usuario si se encuentra el email, o nulo si no existe.

@@ -3,189 +3,130 @@
 package com.uaa.misgastosapp.data.repository
 
 import android.os.Build
-import android.util.Log
 import androidx.annotation.RequiresApi
+import com.uaa.misgastosapp.data.AppDatabase
 import com.uaa.misgastosapp.data.UserDao
 import com.uaa.misgastosapp.data.UserEntity
-import com.uaa.misgastosapp.network.GastosApiService
-import com.uaa.misgastosapp.network.NetworkModule
-import com.uaa.misgastosapp.model.LoginRequest
-import com.uaa.misgastosapp.model.LoginResponse
-import com.uaa.misgastosapp.model.ProfileResponse
-import com.uaa.misgastosapp.model.RegisterRequest
 import com.uaa.misgastosapp.utils.SecureSessionManager
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.delay
 
-// esta clase es la encargada de manejar toda la logica de autenticacion (inicio de sesion, registro, etc.).
-// combina el acceso a la base de datos local (dao) y al servidor remoto (api).
+// esta clase maneja toda la logica de autenticacion (inicio de sesion, registro, etc.).
+// la app es 100% local: no hay backend ni sync remota (las transacciones/presupuestos/cuentas ya
+// vivian solo en Room cifrado con SQLCipher), asi que la cuenta tampoco necesita servidor propio.
 class AuthRepository(
     private val userDao: UserDao,
-    private val sessionManager: SecureSessionManager
+    private val sessionManager: SecureSessionManager,
+    // se necesita la base de datos completa (no solo userDao) para poder borrar TODOS los datos
+    // locales del usuario (transacciones, presupuestos, cuentas, etc.) al eliminar la cuenta:
+    // esta app no tiene datos por-usuario, todo lo del dispositivo pertenece a una sola cuenta.
+    private val appDatabase: AppDatabase
 ) {
 
-    // se crea un acceso directo al servicio de la api para no tener que escribir 'networkmodule.apiservice' cada vez.
-    private val apiService: GastosApiService
-        get() = NetworkModule.apiService
+    // esta funcion inicia sesion contra la base de datos local.
+    suspend fun login(email: String, password: String): UserEntity {
+        val emailLower = email.lowercase()
+        val user = userDao.getUserByEmail(emailLower)
+            ?: throw Exception("Credenciales inválidas")
 
-    // esta funcion se encarga de iniciar sesion a traves del servidor (api).
-    suspend fun loginApi(email: String, password: String): LoginResponse {
-
-        // se limpia cualquier sesion o token anterior para asegurar un inicio de sesion limpio.
-        sessionManager.clearToken()
-        NetworkModule.clearAuthentication()
-        // se agrega una pequeña pausa para asegurar que todo se haya limpiado correctamente.
-        delay(100)
-
-        // se llama a la funcion de login en la api con el email y la contraseña.
-        val response = apiService.login(LoginRequest(identifier = email, password = password))
-        // si la respuesta del servidor no es exitosa o no tiene cuerpo, se lanza un error.
-        if (!response.isSuccessful || response.body() == null) {
-            throw Exception("API Login fallido: ${response.code()} - ${response.errorBody()?.string()}")
-        }
-        // si todo sale bien, se devuelve la respuesta del servidor.
-        return response.body()!!
-    }
-
-    // esta funcion obtiene los datos del perfil del usuario desde el servidor.
-    suspend fun getProfileApi(): ProfileResponse {
-        // se llama a la funcion de obtener perfil en la api.
-        val response = apiService.getProfile()
-        // si la respuesta no es exitosa, se lanza un error.
-        if (!response.isSuccessful || response.body() == null) {
-            throw Exception("API GetProfile fallido: ${response.code()} - ${response.errorBody()?.string()}")
-        }
-        // si todo sale bien, se devuelve el perfil del usuario.
-        return response.body()!!
-    }
-
-    // esta funcion guarda los datos del perfil del usuario en la base de datos local.
-    suspend fun saveUserFromProfile(profile: ProfileResponse, password: String, token: String) {
-        // se crea un objeto 'userentity' con los datos del perfil y la contraseña encriptada.
-        val localUser = UserEntity(
-            id = profile.id,
-            email = profile.email,
-            password = hashPassword(password), // se encripta la contraseña antes de guardarla.
-            name = profile.fullName,
-            createdAt = profile.createdAt
-        )
-
-        // se intenta actualizar o insertar el usuario en la base de datos local.
-        try {
-            // se revisa si el usuario ya existe en la base de datos local.
-            val existingUser = userDao.getUserById(profile.id)
-            if (existingUser != null) {
-                // si existe, se actualizan sus datos.
-                userDao.update(localUser)
-            } else {
-                // si no existe, se inserta como un nuevo usuario.
-                userDao.insert(localUser)
-            }
-        } catch (e: Exception) {
-            // si ocurre un error (por ejemplo, al intentar actualizar un usuario que no existe), se registra y se intenta insertar.
-            Log.e("AuthRepository", "Error saving user, trying insert: ${e.message}")
-            try {
-                userDao.insert(localUser)
-            } catch (insertError: Exception) {
-                // si la insercion tambien falla, se registra el error.
-                Log.e("AuthRepository", "Insert also failed: ${insertError.message}")
-            }
-        }
-
-        // finalmente, se guarda la sesion del usuario en el gestor de sesiones seguras.
-        sessionManager.saveUserSession(
-            userId = profile.id,
-            email = profile.email,
-            name = profile.fullName,
-            username = profile.username,
-            accessToken = token
-        )
-    }
-
-    // esta funcion permite iniciar sesion sin conexion a internet, usando los datos guardados localmente.
-    suspend fun loginOffline(email: String, password: String): UserEntity {
-        // se busca al usuario por email en la base de datos local.
-        val user = userDao.getUserByEmail(email.lowercase())
-            ?: throw Exception("Credenciales inválidas (modo offline)")
-
-        // se verifica si la contraseña ingresada coincide con el hash guardado.
         if (!verifyPassword(password, user.password)) {
-            throw Exception("Credenciales inválidas (modo offline)")
+            throw Exception("Credenciales inválidas")
         }
 
-        // si las credenciales son correctas, se guarda una sesion local con un token especial de "modo offline".
         sessionManager.saveUserSession(
             userId = user.id,
             email = user.email,
             name = user.name,
-            username = email.substringBefore("@"),
-            accessToken = "offline_mode"
+            username = emailLower.substringBefore("@"),
+            // no hay servidor al que enviarle un token: solo se necesita un valor no vacio para
+            // que SecureSessionManager.isLoggedIn() lo considere una sesion activa.
+            accessToken = localSessionToken()
         )
-        // se devuelve el usuario encontrado.
         return user
     }
 
     // se asegura que este codigo solo se ejecute en versiones de android compatibles.
     @RequiresApi(Build.VERSION_CODES.O)
-    // esta funcion se encarga del registro de un nuevo usuario.
+    // esta funcion registra un nuevo usuario directamente en la base de datos local.
     suspend fun register(name: String, email: String, username: String, password: String) {
-        // primero, se intenta registrar al usuario en el servidor.
-        val response = apiService.register(
-            RegisterRequest(
-                fullName = name,
-                email = email,
-                username = username,
-                password = password
-            )
-        )
-
-        // si el registro en el servidor falla, se lanza un error.
-        if (!response.isSuccessful) {
-            throw Exception("API Register fallido: ${response.code()} - ${response.errorBody()?.string()}")
-        }
-
-        // si el registro en el servidor es exitoso, se guarda el nuevo usuario en la base de datos local.
-        val hashedPassword = hashPassword(password)
         val emailLower = email.lowercase()
-        // se busca si el usuario ya existe localmente.
-        val existingUser = userDao.getUserByEmail(emailLower)
-        if (existingUser != null) {
-            // si ya existe, se actualizan sus datos.
-            val updatedUser = existingUser.copy(
-                password = hashedPassword,
-                name = name
-            )
-            userDao.update(updatedUser)
-        } else {
-            // si no existe, se crea un nuevo usuario.
-            val newUser = UserEntity(
-                email = emailLower,
-                password = hashedPassword,
-                name = name,
-                createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            )
-            userDao.insert(newUser)
+        if (userDao.getUserByEmail(emailLower) != null) {
+            throw Exception("El email ya está registrado")
         }
+
+        val newUser = UserEntity(
+            email = emailLower,
+            password = hashPassword(password),
+            name = name,
+            createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        )
+        val newUserId = userDao.insert(newUser)
+
+        sessionManager.saveUserSession(
+            userId = newUserId.toInt(),
+            email = emailLower,
+            name = name,
+            username = username,
+            accessToken = localSessionToken()
+        )
     }
 
-    // esta funcion se encarga de cerrar la sesion del usuario.
-    suspend fun logout() {
-        try {
-            // se comprueba si el usuario no esta en modo offline.
-            if (sessionManager.getAccessToken() != "offline_mode") {
-                try {
-                    // si esta online, se intenta cerrar la sesion en el servidor.
-                    apiService.logout()
-                } catch (e: Exception) {
-                    // si la llamada al servidor falla, se registra el error pero se continua con el cierre de sesion local.
-                    Log.e("AuthRepository", "API logout failed, continuing with local logout", e)
-                }
+    // esta funcion maneja el inicio de sesion con Google: no hay backend que verifique el ID
+    // token, asi que se confia en los datos que ya entrega Credential Manager (una API del
+    // sistema operativo, no una llamada de red hecha a mano) y se busca/crea el usuario local
+    // por email, igual que con email+password.
+    suspend fun loginOrRegisterWithGoogle(email: String, displayName: String): UserEntity {
+        val emailLower = email.lowercase()
+        val existingUser = userDao.getUserByEmail(emailLower)
+
+        val user = existingUser ?: run {
+            // las cuentas creadas via Google no tienen contraseña propia: se guarda el hash de un
+            // valor aleatorio que nunca coincidira con ninguna contraseña que alguien pueda
+            // escribir, en vez de dejar el campo vacio (la columna es NOT NULL).
+            val randomPassword = java.security.SecureRandom().let { random ->
+                ByteArray(32).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
             }
-        } finally {
-            // pase lo que pase, siempre se cierra la sesion localmente limpiando los datos guardados.
-            sessionManager.logout()
+            val newUser = UserEntity(
+                email = emailLower,
+                password = hashPassword(randomPassword),
+                name = displayName,
+                createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            )
+            val newUserId = userDao.insert(newUser)
+            newUser.copy(id = newUserId.toInt())
         }
+
+        sessionManager.saveUserSession(
+            userId = user.id,
+            email = user.email,
+            name = user.name,
+            username = emailLower.substringBefore("@"),
+            accessToken = localSessionToken()
+        )
+        return user
+    }
+
+    // esta funcion cierra la sesion del usuario. no hay servidor al que avisarle: alcanza con
+    // limpiar la sesion local.
+    fun logout() {
+        sessionManager.logout()
+    }
+
+    // esta funcion elimina la cuenta y todos los datos financieros locales del dispositivo.
+    // requerido por las politicas de Google Play para apps que permiten crear una cuenta.
+    suspend fun deleteAccount() {
+        // esta app no separa datos por usuario (todo el dispositivo es de una sola cuenta), asi
+        // que se borran todas las tablas en vez de solo la fila de 'users'.
+        appDatabase.clearAllTables()
+        sessionManager.logout()
+    }
+
+    // genera un identificador aleatorio para marcar la sesion como activa localmente (ver
+    // SecureSessionManager.isLoggedIn, que solo exige que el token no este vacio).
+    private fun localSessionToken(): String {
+        val bytes = ByteArray(32)
+        java.security.SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     // esta funcion se usa para encriptar contraseñas con PBKDF2 y salt aleatorio.

@@ -107,7 +107,6 @@ fun HomeScreen(
 
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
     val userName = if (isLoggedIn) authViewModel.getCurrentUserName() ?: "Usuario" else "Invitado"
-    val isOnline by authViewModel.isOnlineMode.collectAsState()
     val context = LocalContext.current
 
     // se observa el estado de las operaciones para mostrar mensajes.
@@ -131,21 +130,12 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Hola, $userName") },
-                // el color de la barra cambia si la app esta en modo offline.
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isOnline) MaterialTheme.colorScheme.primary else Color.Gray,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
                 ),
                 actions = {
-                    if (!isOnline) {
-                        Text(
-                            "Modo Offline",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
                     // Botón Exportar (solo Premium)
                     val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
                     if (isPremium) {

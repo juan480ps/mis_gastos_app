@@ -32,8 +32,10 @@ class PremiumManager private constructor(context: Context) : PurchasesUpdatedLis
         // Clave publica de licencia (Base64) de Play Console > Monetization setup > Licensing.
         // Sin esta clave no se puede verificar la firma de una compra localmente, lo que permite
         // que una compra falsificada (JSON armado a mano) pase como valida en un dispositivo rooteado.
-        // TODO: completar con la clave real antes de publicar.
-        private const val LICENSE_PUBLIC_KEY_BASE64 = ""
+        // Se lee de BuildConfig.LICENSE_PUBLIC_KEY_BASE64 (definido en app/build.gradle.kts desde
+        // LICENSE_PUBLIC_KEY_BASE64 en local.properties); vacia por defecto, hay que pegar la clave
+        // real ahi antes de publicar (ver isPurchaseSignatureValid: sin ella se rechaza toda compra).
+        private val LICENSE_PUBLIC_KEY_BASE64 = BuildConfig.LICENSE_PUBLIC_KEY_BASE64
 
         @Volatile
         private var instance: PremiumManager? = null

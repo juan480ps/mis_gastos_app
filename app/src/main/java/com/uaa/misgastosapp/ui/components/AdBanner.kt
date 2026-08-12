@@ -27,6 +27,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
+import com.uaa.misgastosapp.BuildConfig
 import com.uaa.misgastosapp.data.AdsManager
 
 /**
@@ -36,8 +37,13 @@ import com.uaa.misgastosapp.data.AdsManager
 @Composable
 fun AdBanner(
     modifier: Modifier = Modifier,
-    testAdUnitId: String = "ca-app-pub-3940256099942544/6300978111"
+    // viene de BuildConfig.ADMOB_BANNER_AD_UNIT_ID (definido en app/build.gradle.kts desde
+    // local.properties); usa el ad unit de test de Google si no se configura ninguno real.
+    adUnitId: String = BuildConfig.ADMOB_BANNER_AD_UNIT_ID
 ) {
+    // se copia a un nombre distinto porque dentro del "apply { }" del AdView, la propiedad
+    // AdView.adUnitId oculta (shadowing) este parametro si se llaman igual.
+    val bannerAdUnitId = adUnitId
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val isAdsReady by AdsManager.isReady.collectAsState()
@@ -79,8 +85,7 @@ fun AdBanner(
                     // Configurar tamaño
                     setAdSize(AdSize.BANNER)
                     
-                    // ID del anuncio de prueba
-                    adUnitId = testAdUnitId
+                    this.adUnitId = bannerAdUnitId
                     
                     // Layout params
                     layoutParams = LinearLayout.LayoutParams(

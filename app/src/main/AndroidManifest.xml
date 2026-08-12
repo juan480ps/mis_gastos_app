@@ -21,10 +21,11 @@
         android:theme="@style/Theme.Gastos"
         tools:targetApi="31">
 
-        <!-- AdMob App ID (reemplazar con tu ID real de AdMob) -->
+        <!-- AdMob App ID: viene de ADMOB_APP_ID en local.properties/variables de entorno
+             (ver app/build.gradle.kts); usa el ID de test de Google si no se configura ninguno. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="${adMobAppId}"/>
 
         <!-- FileProvider para exportar archivos -->
         <provider
