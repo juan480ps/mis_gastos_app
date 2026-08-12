@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.uaa.misgastosapp.BuildConfig
 import com.uaa.misgastosapp.Routes
 import com.uaa.misgastosapp.ui.components.AdBanner
 import com.uaa.misgastosapp.ui.components.AppBottomNavBar
@@ -180,8 +181,11 @@ fun HomeScreen(
                             tint = Color.White
                         )
                     }
-                    // Botón Premium
-                    if (!isPremium) {
+                    // Botón Premium: se oculta al ser premium (ya no hace falta el CTA de compra),
+                    // excepto en debug, donde siempre queda visible para poder volver a apagar el
+                    // toggle de simulacion en PremiumScreen (si no, se pierde el unico acceso a esa
+                    // pantalla en cuanto se activa el toggle).
+                    if (!isPremium || BuildConfig.DEBUG) {
                         IconButton(onClick = { navController.navigate(Routes.PREMIUM) }) {
                             Icon(
                                 Icons.Default.Star,
