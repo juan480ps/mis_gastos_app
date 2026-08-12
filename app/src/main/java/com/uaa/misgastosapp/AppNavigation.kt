@@ -33,6 +33,7 @@ object Routes {
     const val THEMES = "themes"
     const val MANAGE_ACCOUNTS = "manage_accounts"
     const val ADD_ACCOUNT = "add_account"
+    const val LEGAL = "legal"
     const val ARG_ACCOUNT_ID = "accountId"
     const val ARG_TRANSACTION_ID = "transactionId"
     const val ARG_PRESELECTED_ACCOUNT_ID = "preselectedAccountId"
@@ -141,7 +142,8 @@ fun AppNavigation(navController: NavHostController) {
         // Premium
         composable(Routes.PREMIUM) {
             PremiumScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToLegal = { navController.navigate(Routes.LEGAL) }
             )
         }
 
@@ -174,5 +176,13 @@ fun AppNavigation(navController: NavHostController) {
             AddAccountScreen(navController = navController, accountId = if (accountId == -1) null else accountId)
         }
         composable(Routes.ADD_ACCOUNT) { AddAccountScreen(navController = navController, accountId = null) }
+
+        // Legal: politica de privacidad, terminos de servicio y borrado de cuenta.
+        composable(Routes.LEGAL) {
+            LegalScreen(
+                navController = navController,
+                onBack = { navController.popBackStack() }
+            )
+        }
     }
 }

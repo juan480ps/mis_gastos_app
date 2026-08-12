@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
@@ -37,6 +38,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Material 3 (Scaffold, TopAppBar) ya maneja los insets de status/navigation bar solo;
+        // sin esto la app queda con las barras del sistema opacas en vez de edge-to-edge.
+        enableEdgeToEdge()
 
         // Es una app financiera: bloquea capturas/grabacion de pantalla y evita que saldos y
         // movimientos queden visibles en la miniatura de "apps recientes" del sistema.
@@ -48,7 +52,12 @@ class MainActivity : ComponentActivity() {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // Procesar transacciones recurrentes al abrir la app
+        // Procesar transacciones recurrentes al abrir la app. Esto no duplica la logica de
+        // RecurringTransactionWorker (que corre cada 6h en background): ambos llaman al mismo
+        // processDueRecurringTransactions(), que es idempotente. Se mantienen los dos a proposito
+        // -- este chequeo inmediato evita que el usuario vea el balance viejo hasta 6h despues de
+        // abrir la app si el Worker todavia no corrio, y el Worker cubre el caso de que la app no
+        // se abra en un buen rato.
         lifecycleScope.launch {
             try {
                 recurringTransactionViewModel.processDueRecurringTransactions()

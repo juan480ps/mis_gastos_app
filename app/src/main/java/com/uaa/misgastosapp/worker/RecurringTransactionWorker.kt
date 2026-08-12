@@ -13,6 +13,11 @@ import java.util.concurrent.TimeUnit
 /**
  * Worker que procesa transacciones recurrentes vencidas en background.
  * Se ejecuta periodicamente sin necesidad de abrir la app.
+ *
+ * MainActivity.onCreate() tambien llama a processDueRecurringTransactions() al abrir la app: no
+ * es logica duplicada (es el mismo metodo idempotente, invocado desde dos disparadores
+ * complementarios) -- este Worker cubre el caso de la app cerrada por horas, y la llamada al
+ * abrir la app evita mostrar un balance desactualizado hasta la proxima corrida de 6h.
  */
 class RecurringTransactionWorker(
     context: Context,

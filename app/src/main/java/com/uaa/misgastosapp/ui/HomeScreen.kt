@@ -79,6 +79,9 @@ fun HomeScreen(
     var accountFilterExpanded by remember { mutableStateOf(false) }
     val transactions = if (accountFilter == null) allTransactions else allTransactions.filter { it.accountId == accountFilter?.id }
     val budgetsWithSpending by budgetViewModel.budgetsWithSpendingForCurrentMonth.collectAsState(initial = emptyList())
+    // se filtra una sola vez por cambio de 'budgetsWithSpending' en vez de en cada recomposicion
+    // de la lista (ej. al escribir en un campo de texto de otra parte de la pantalla).
+    val budgetsToShow = remember(budgetsWithSpending) { budgetsWithSpending.filter { it.amount > 0 } }
     val currentYearMonth by budgetViewModel.currentMonthYear.collectAsState()
     // se configuran formatos de moneda y fecha.
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("es", "PY")).apply {
@@ -88,6 +91,7 @@ fun HomeScreen(
     val monthHeaderFormatter = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale("es", "ES"))
     // se definen estados para manejar dialogos y la visibilidad de las transacciones.
     var showLogoutDialog by rememberSaveable { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     // por defecto, los meses anteriores al actual arrancan colapsados y el mes actual expandido;
     // si el usuario toca el encabezado de un mes para cambiarlo, esa eleccion se recuerda y
     // tiene prioridad sobre el default (para ambos sentidos: expandir un mes viejo o colapsar
@@ -136,45 +140,13 @@ fun HomeScreen(
                     actionIconContentColor = Color.White
                 ),
                 actions = {
-                    // Botón Exportar (solo Premium)
                     val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
-                    if (isPremium) {
-                        IconButton(onClick = { navController.navigate(Routes.EXPORT) }) {
-                            Icon(
-                                Icons.Default.FileDownload,
-                                contentDescription = "Exportar",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                    // Botón Temas: visible siempre, ThemesScreen ya bloquea los temas premium si no corresponde.
-                    IconButton(onClick = { navController.navigate(Routes.THEMES) }) {
-                        Icon(
-                            Icons.Default.Palette,
-                            contentDescription = "Temas",
-                            tint = Color.White
-                        )
-                    }
-                    // Botón Cuentas: separar gastos por banco es opcional, se accede desde acá.
-                    IconButton(onClick = { navController.navigate(Routes.MANAGE_ACCOUNTS) }) {
-                        Icon(
-                            Icons.Default.AccountBalance,
-                            contentDescription = "Cuentas",
-                            tint = Color.White
-                        )
-                    }
-                    // Botón Ayuda: vuelve a mostrar la pantalla de bienvenida que explica la app.
-                    IconButton(onClick = { navController.navigate(Routes.ONBOARDING) }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.HelpOutline,
-                            contentDescription = "Ayuda",
-                            tint = Color.White
-                        )
-                    }
+
                     // Botón Premium: se oculta al ser premium (ya no hace falta el CTA de compra),
                     // excepto en debug, donde siempre queda visible para poder volver a apagar el
                     // toggle de simulacion en PremiumScreen (si no, se pierde el unico acceso a esa
-                    // pantalla en cuanto se activa el toggle).
+                    // pantalla en cuanto se activa el toggle). Queda visible fuera del menu porque
+                    // es la principal palanca de monetizacion, no una accion secundaria mas.
                     if (!isPremium || BuildConfig.DEBUG) {
                         IconButton(onClick = { navController.navigate(Routes.PREMIUM) }) {
                             Icon(
@@ -184,11 +156,53 @@ fun HomeScreen(
                             )
                         }
                     }
-                    IconButton(onClick = { showLogoutDialog = true }) {
-                        if (isLoggedIn) {
-                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Cerrar Sesión")
-                        } else {
-                            Icon(Icons.Default.Person, contentDescription = "Iniciar Sesión")
+
+                    // El resto de las acciones (antes 5-6 iconos sueltos en la topbar, demasiado
+                    // amontonados) se agrupan en un menu de overflow.
+                    Box {
+                        IconButton(onClick = { showMoreMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones", tint = Color.White)
+                        }
+                        DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                            if (isPremium) {
+                                DropdownMenuItem(
+                                    text = { Text("Exportar") },
+                                    leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                                    onClick = { showMoreMenu = false; navController.navigate(Routes.EXPORT) }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Temas") },
+                                leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) },
+                                onClick = { showMoreMenu = false; navController.navigate(Routes.THEMES) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Cuentas") },
+                                leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null) },
+                                onClick = { showMoreMenu = false; navController.navigate(Routes.MANAGE_ACCOUNTS) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Legal y privacidad") },
+                                leadingIcon = { Icon(Icons.Default.PrivacyTip, contentDescription = null) },
+                                onClick = { showMoreMenu = false; navController.navigate(Routes.LEGAL) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Ayuda") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null) },
+                                onClick = { showMoreMenu = false; navController.navigate(Routes.ONBOARDING) }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text(if (isLoggedIn) "Cerrar sesión" else "Iniciar sesión") },
+                                leadingIcon = {
+                                    if (isLoggedIn) {
+                                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
+                                    } else {
+                                        Icon(Icons.Default.Person, contentDescription = null)
+                                    }
+                                },
+                                onClick = { showMoreMenu = false; showLogoutDialog = true }
+                            )
                         }
                     }
                 }
@@ -300,8 +314,8 @@ fun HomeScreen(
 
             // se muestran los presupuestos del mes, salvo que el usuario haya colapsado la seccion.
             if (!budgetSummaryCollapsed) {
-                if (budgetsWithSpending.any { it.amount > 0 }) {
-                    items(budgetsWithSpending.filter { it.amount > 0 }) { budgetItem ->
+                if (budgetsToShow.isNotEmpty()) {
+                    items(budgetsToShow, key = { it.id }) { budgetItem ->
                         BudgetStatusItem(budgetItem, currencyFormat)
                     }
                 } else {
@@ -450,7 +464,7 @@ fun HomeScreen(
             AlertDialog(
                 onDismissRequest = { showLogoutDialog = false },
                 title = { Text("Iniciar Sesión") },
-                text = { Text("¿Deseas iniciar sesión para sincronizar tus datos con la nube?") },
+                text = { Text("¿Deseas crear una cuenta o iniciar sesión en este dispositivo?") },
                 confirmButton = {
                     TextButton(
                         onClick = {

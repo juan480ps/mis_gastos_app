@@ -21,18 +21,15 @@ import kotlinx.coroutines.launch
 // relacionada con el inicio de sesion, registro y estado de la sesion del usuario.
 // la app es 100% local (ver AuthRepository): no hay backend, asi que no existe un modo
 // online/offline distinto, todo corre siempre contra la base de datos cifrada del dispositivo.
-class AuthViewModel(application: Application) : AndroidViewModel(application) {
-    // se crea una instancia del gestor de sesiones seguras.
-    private val sessionManager = SecureSessionManager(application)
-    // se declara el repositorio de autenticacion, que sera la unica fuente de datos.
-    private val authRepository: AuthRepository
-    // se crea el helper para Google Sign-In.
-    private val googleSignInHelper = GoogleSignInHelper(application)
-
-    // el bloque 'init' se ejecuta cuando se crea una instancia de este viewmodel.
-    init {
-        authRepository = AppRepositories.authRepository(application, sessionManager)
-    }
+// las dependencias se pueden inyectar (para tests, igual que en TransactionViewModel);
+// @JvmOverloads genera el constructor de un solo parametro que necesita el ViewModelProvider
+// por defecto para instanciarlo en produccion.
+class AuthViewModel @JvmOverloads constructor(
+    application: Application,
+    private val sessionManager: SecureSessionManager = SecureSessionManager(application),
+    private val authRepository: AuthRepository = AppRepositories.authRepository(application, sessionManager),
+    private val googleSignInHelper: GoogleSignInHelper = GoogleSignInHelper(application)
+) : AndroidViewModel(application) {
 
     // se crea un 'stateflow' para saber si el usuario ha iniciado sesion. es privado para que solo el viewmodel lo pueda modificar.
     private val _isLoggedIn = MutableStateFlow(sessionManager.isLoggedIn())
@@ -177,6 +174,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun getCurrentUserId(): Int = sessionManager.getUserId()
 
     // funciones de validacion privadas.
-    private fun isValidEmail(email: String): Boolean = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+    // se usa un regex propio en vez de android.util.Patterns.EMAIL_ADDRESS: ese campo depende del
+    // framework de Android real y en el stub que usan los tests unitarios de JVM (sin Robolectric)
+    // vale null, lo que hacia que esta validacion lanzara NullPointerException en tests.
+    private fun isValidEmail(email: String): Boolean =
+        "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex().matches(email)
     private fun isPasswordValid(password: String): Boolean = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}$".toRegex().matches(password)
 }

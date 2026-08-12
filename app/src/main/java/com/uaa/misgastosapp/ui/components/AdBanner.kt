@@ -12,7 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -72,8 +71,9 @@ fun AdBanner(
             .height(60.dp) // Altura fija siempre
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFFF5F5F5))
-            .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(8.dp)),
+            // antes eran grises fijos que no se adaptaban a dark mode ni a los 9 temas de la app.
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         // AndroidView que crea UN SOLO AdView y lo reutiliza
@@ -127,13 +127,13 @@ fun AdBanner(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFE8EAF6)),
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "📢 Publicidad",
                     fontSize = 12.sp,
-                    color = Color(0xFF3F51B5),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )

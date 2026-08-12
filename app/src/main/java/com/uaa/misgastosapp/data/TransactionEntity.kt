@@ -11,7 +11,9 @@ import androidx.room.PrimaryKey
 @Entity(
     // aca se le da el nombre "transactions" a la tabla.
     tableName = "transactions",
-    indices = [Index(value = ["categoryId"]), Index(value = ["accountId"])],
+    // 'date' tiene indice porque las consultas de gastos del mes (Home, Charts) filtran con
+    // "WHERE date LIKE 'yyyy-MM%'"; sin indice, cada una de esas consultas escanea toda la tabla.
+    indices = [Index(value = ["categoryId"]), Index(value = ["accountId"]), Index(value = ["date"])],
     // se definen las llaves foraneas, que son relaciones con otras tablas.
     foreignKeys = [
         ForeignKey(

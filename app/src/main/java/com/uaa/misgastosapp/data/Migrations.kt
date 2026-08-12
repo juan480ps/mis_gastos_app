@@ -110,6 +110,17 @@ object Migrations {
     }
 
     /**
+     * Migration from version 7 to 8:
+     * Agrega un indice en transactions.date: las consultas de gastos del mes (Home, Charts)
+     * filtran con "WHERE date LIKE 'yyyy-MM%'", y sin indice cada una escaneaba toda la tabla.
+     */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_transactions_date ON transactions(date)")
+        }
+    }
+
+    /**
      * List of all migrations in order.
      * Add new migrations to this list when upgrading the database version.
      */
@@ -119,6 +130,7 @@ object Migrations {
         MIGRATION_3_4,
         MIGRATION_4_5,
         MIGRATION_5_6,
-        MIGRATION_6_7
+        MIGRATION_6_7,
+        MIGRATION_7_8
     )
 }

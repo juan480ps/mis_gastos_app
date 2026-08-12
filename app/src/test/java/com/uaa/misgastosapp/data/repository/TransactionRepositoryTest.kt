@@ -18,6 +18,10 @@ class TransactionRepositoryTest {
 
     @Before
     fun setup() {
+        // TransactionRepository.allTransactions llama a transactionDao.getAllWithCategoryName()
+        // apenas se construye (es un 'val', no una funcion): sin este stub por defecto, MockK no
+        // tiene ninguna respuesta configurada y lanza MockKException al construir el repository.
+        every { transactionDao.getAllWithCategoryName() } returns flowOf(emptyList())
         repository = TransactionRepository(transactionDao)
     }
 
@@ -45,8 +49,13 @@ class TransactionRepositoryTest {
 
         every { transactionDao.getAllWithCategoryName() } returns flowOf(entities)
 
+        // allTransactions es un 'val' resuelto una sola vez en el constructor: el repository de
+        // 'setup()' ya capturo el flow vacio de arriba, asi que hace falta una instancia nueva
+        // para que tome este stub recien configurado.
+        val repositoryWithEntities = TransactionRepository(transactionDao)
+
         // When
-        val result = repository.allTransactions.first()
+        val result = repositoryWithEntities.allTransactions.first()
 
         // Then
         assertEquals(2, result.size)

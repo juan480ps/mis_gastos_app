@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,15 +31,17 @@ import com.uaa.misgastosapp.utils.Result
 
 // paleta acotada para identificar cuentas visualmente; no depende del tema elegido en Temas
 // porque cada cuenta necesita su propio color, independiente del color general de la app.
+// cada color lleva un nombre en español para que TalkBack pueda anunciarlo (ver contentDescription
+// mas abajo); antes los swatches no tenian ninguna etiqueta accesible.
 val ACCOUNT_COLOR_PALETTE = listOf(
-    "#2563EB", // azul
-    "#16A34A", // verde
-    "#DC2626", // rojo
-    "#9333EA", // violeta
-    "#0D9488", // teal
-    "#EA580C", // naranja
-    "#DB2777", // rosa
-    "#525252"  // gris
+    "#2563EB" to "Azul",
+    "#16A34A" to "Verde",
+    "#DC2626" to "Rojo",
+    "#9333EA" to "Violeta",
+    "#0D9488" to "Verde azulado",
+    "#EA580C" to "Naranja",
+    "#DB2777" to "Rosa",
+    "#525252" to "Gris"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,7 +53,7 @@ fun AddAccountScreen(
 ) {
     var accountName by remember { mutableStateOf("") }
     var bankName by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf(ACCOUNT_COLOR_PALETTE.first()) }
+    var selectedColor by remember { mutableStateOf(ACCOUNT_COLOR_PALETTE.first().first) }
     // evita que la carga inicial de datos (modo edicion) pise lo que el usuario ya empezo a escribir.
     var loadedExistingAccount by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -148,23 +152,30 @@ fun AddAccountScreen(
 
             Text("Color", style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ACCOUNT_COLOR_PALETTE.forEach { hex ->
+                ACCOUNT_COLOR_PALETTE.forEach { (hex, colorName) ->
                     val color = Color(android.graphics.Color.parseColor(hex))
+                    val isSelected = selectedColor == hex
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            // minimo recomendado de 48dp para un elemento tactil (antes 36dp).
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(color)
                             .border(
-                                width = if (selectedColor == hex) 3.dp else 0.dp,
+                                width = if (isSelected) 3.dp else 0.dp,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 shape = CircleShape
                             )
-                            .clickable { selectedColor = hex },
+                            .clickable { selectedColor = hex }
+                            .semantics {
+                                // el swatch no tenia ninguna etiqueta accesible antes: TalkBack lo
+                                // anunciaba como un elemento sin nombre.
+                                contentDescription = if (isSelected) "$colorName, seleccionado" else colorName
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (selectedColor == hex) {
-                            Icon(Icons.Filled.Check, contentDescription = "Seleccionado", tint = Color.White)
+                        if (isSelected) {
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
                         }
                     }
                 }

@@ -20,6 +20,11 @@ class BudgetRepositoryTest {
 
     @Before
     fun setup() {
+        // BudgetRepository llama a budgetDao.getRecurringBudgets() apenas se construye (para
+        // recurringBudgetsCount) y tambien dentro de getBudgetForCategoryAndMonth(); sin este
+        // stub, MockK no tiene ninguna respuesta configurada y lanza MockKException al
+        // construir el repository, antes de llegar a ningun test.
+        every { budgetDao.getRecurringBudgets() } returns flowOf(emptyList())
         repository = BudgetRepository(budgetDao, categoryDao, transactionDao)
     }
 
@@ -56,6 +61,8 @@ class BudgetRepositoryTest {
             amount = 100000.0
         )
         every { budgetDao.getBudgetForCategoryAndMonth(1, "2026-01") } returns flowOf(budget)
+        // getBudgetForCategoryAndMonth resuelve el nombre de categoria con este dao aparte.
+        coEvery { categoryDao.getCategoryNameById(1) } returns "Comida"
 
         // When
         val result = repository.getBudgetForCategoryAndMonth(1, "2026-01").first()

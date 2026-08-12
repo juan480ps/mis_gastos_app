@@ -3,6 +3,7 @@ package com.uaa.misgastosapp.ui
 import android.app.Activity
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import com.uaa.misgastosapp.data.PremiumManager
 @Composable
 fun PremiumScreen(
     onBack: () -> Unit,
+    onNavigateToLegal: () -> Unit = {},
     premiumManager: PremiumManager = PremiumManager.getInstance(LocalContext.current)
 ) {
     val isPremium by premiumManager.isPremium.collectAsState()
@@ -62,15 +64,17 @@ fun PremiumScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header con gradiente
+            // Header con gradiente. Usa los colores del tema activo (antes eran un morado/indigo
+            // fijo) para que se vea coherente con cualquiera de los 9 temas de la app, en vez de
+            // desentonar en Dorado/Rosa/Medianoche/Oceano/Bosque/Atardecer.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF6C63FF),
-                                Color(0xFF3F51B5)
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
                             )
                         ),
                         shape = RoundedCornerShape(20.dp)
@@ -83,6 +87,9 @@ fun PremiumScreen(
                         imageVector = Icons.Default.Star,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
+                        // el dorado del icono de estrella es un acento de marca intencional
+                        // (mismo criterio que el icono "Premium" de HomeScreen), no un olvido:
+                        // se mantiene constante entre temas a proposito.
                         tint = Color(0xFFFFD700)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -90,13 +97,13 @@ fun PremiumScreen(
                         text = "Premium",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Desbloquea todo el potencial",
                         fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -280,7 +287,7 @@ fun PremiumScreen(
                 ) {
                     if (purchaseLoading) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
@@ -295,9 +302,12 @@ fun PremiumScreen(
                 Text(
                     text = "Al comprar, aceptas los Términos de Servicio",
                     fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onNavigateToLegal),
+                    textAlign = TextAlign.Center,
+                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
