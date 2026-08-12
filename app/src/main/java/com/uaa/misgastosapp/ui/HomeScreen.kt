@@ -136,8 +136,8 @@ fun HomeScreen(
                 title = { Text("Hola, $userName") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
                     val isPremium by PremiumManager.getInstance(context).isPremium.collectAsState()
@@ -161,7 +161,7 @@ fun HomeScreen(
                     // amontonados) se agrupan en un menu de overflow.
                     Box {
                         IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones", tint = Color.White)
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones", tint = MaterialTheme.colorScheme.onPrimary)
                         }
                         DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
                             if (isPremium) {

@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import java.text.NumberFormat
 import java.util.*
-import androidx.compose.ui.graphics.Color
 
 // aca se define un composable reutilizable que muestra una tarjeta con el balance total.
 @Composable
@@ -56,7 +55,7 @@ fun SummaryCard(balance: Double) {
                 Text(
                     "Balance Total",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
                 IconButton(
                     onClick = { BalanceVisibilityPrefs.setVisible(context, !isBalanceVisible) },
@@ -65,7 +64,7 @@ fun SummaryCard(balance: Double) {
                     Icon(
                         if (isBalanceVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = if (isBalanceVisible) "Ocultar saldo" else "Mostrar saldo",
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -74,7 +73,7 @@ fun SummaryCard(balance: Double) {
                 if (isBalanceVisible) formattedBalance else "₲ • • • • • •",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onPrimary
             )
         }
     }

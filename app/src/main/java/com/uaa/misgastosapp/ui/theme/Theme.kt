@@ -26,7 +26,9 @@ private fun Color.shiftHue(degrees: Float): Color {
 // antes se dejaba que Material3 completara onPrimary/onSecondary/onTertiary con sus valores por
 // defecto (pensados para el morado de fabrica), lo que en modo oscuro se notaba como colores que
 // no combinaban con el primary/secondary/tertiary que si estaban personalizados.
-private fun onColorFor(background: Color): Color =
+// 'internal' (no private): ThemesScreen la reusa para calcular el texto/icono legible de cada
+// swatch de previsualizacion (temas claros como Dorado/Rosa necesitan texto oscuro, no blanco fijo).
+internal fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color(0xFF1B1B1B) else Color.White
 
 // tono de "contenedor" (fondo de chips, FAB de baja enfasis, etc.) derivado del mismo color, en

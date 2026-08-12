@@ -27,6 +27,7 @@ import com.uaa.misgastosapp.data.PremiumManager
 import com.uaa.misgastosapp.ui.theme.AppTheme
 import com.uaa.misgastosapp.ui.theme.AppThemes
 import com.uaa.misgastosapp.ui.theme.ThemePrefs
+import com.uaa.misgastosapp.ui.theme.onColorFor
 
 /**
  * Pantalla de selección de temas.
@@ -175,6 +176,10 @@ private fun ThemeCard(
         ),
         onClick = onClick
     ) {
+        // texto/icono legible segun el color propio de ESTE swatch, no del tema activo: temas
+        // claros como Dorado o Rosa necesitan texto oscuro, no blanco fijo (antes era ilegible
+        // sobre esos dos swatches especificos).
+        val onSwatchColor = onColorFor(theme.primaryColor)
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -186,21 +191,21 @@ private fun ThemeCard(
                 Icon(
                     theme.icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = onSwatchColor,
                     modifier = Modifier.size(32.dp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     theme.name,
                     fontSize = 10.sp,
-                    color = Color.White,
+                    color = onSwatchColor,
                     textAlign = TextAlign.Center
                 )
                 if (isLocked) {
                     Icon(
                         Icons.Default.Lock,
                         contentDescription = "Premium",
-                        tint = Color.White.copy(alpha = 0.7f),
+                        tint = onSwatchColor.copy(alpha = 0.7f),
                         modifier = Modifier.size(12.dp)
                     )
                 }

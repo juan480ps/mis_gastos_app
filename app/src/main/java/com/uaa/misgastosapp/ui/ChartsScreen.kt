@@ -77,9 +77,9 @@ fun ChartsScreen(
                 title = { Text("Resumen Gráfico") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White,
-                    navigationIconContentColor = Color.White
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -221,11 +221,13 @@ fun ChartsScreen(
 // este composable se encarga de mostrar el grafico de torta usando la libreria mpandroidchart.
 @Composable
 fun MPAndroidPieChart(pieChartDataList: List<PieChartData>) {
-    // se ajusta el color del texto segun el tema del sistema.
+    // se ajusta el color del texto segun el tema del sistema. la rama de modo claro devolvia
+    // White (el comentario "// Black" delataba que la intencion original era otra): el texto del
+    // grafico quedaba practicamente invisible sobre el fondo claro.
     val chartTextColor = if (isSystemInDarkTheme()) {
         Color.White
     } else {
-        Color.White // Black
+        Color.Black
     }
     // se usa 'androidview' para integrar una vista de android (el grafico) dentro de compose.
     AndroidView(
