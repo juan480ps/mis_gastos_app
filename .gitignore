@@ -16,3 +16,5 @@
 run_backend.py
 server.pid
 server.log
+
+./freebuff/*
