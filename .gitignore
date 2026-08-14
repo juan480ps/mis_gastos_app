@@ -17,4 +17,8 @@ run_backend.py
 server.pid
 server.log
 
-./freebuff/*
+# Ignorar todas las carpetas que empiezan con punto y su contenido
+# (excepto .github, que versiona el workflow de CI, y .idea, con su excepcion de arriba)
+.*/
+!/.github/
+!/.idea/
